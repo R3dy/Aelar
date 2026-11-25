@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 rm -rf dist && mkdir -p dist/assets
 npx esbuild src/main.js --bundle --format=iife --minify --target=es2020 --outfile=dist/game.js --log-level=warning
 cp index.html dist/
-cp -r assets/hud assets/tex assets/fonts dist/assets/
+cp -r assets/hud assets/tex assets/fonts assets/models dist/assets/ && rm -f dist/assets/models/README.md
 rm -f dist/assets/hud/layout.json
 # Artifact variant: the host adds doctype/head, so strip ours
 python3 - <<'PY'

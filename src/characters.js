@@ -251,3 +251,114 @@ export function makeRyn() {
   root.userData.head = head;
   return root;
 }
+
+// ---------------------------------------------------------------------------
+// Meshy-made characters (assets/models). They keep the same interface as the
+// placeholders above, so the game swaps them in once they have loaded.
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+function setupModel(scene, scale) {
+  scene.scale.setScalar(scale);
+  scene.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true; o.receiveShadow = true;
+      o.frustumCulled = false;
+      if (o.material) o.material.envMapIntensity = 0.6;
+    }
+  });
+  return scene;
+}
+
+export async function loadHeroModel() {
+  const loader = new GLTFLoader();
+  const [gl, sw] = await Promise.all([loader.loadAsync('assets/models/aelar.glb'), loader.loadAsync('assets/models/aelar_sword.glb')]);
+  const root = new THREE.Group();
+  const model = setupModel(gl.scene, 1.04);
+  const pivot = new THREE.Group(); // used for the dodge roll lean
+  pivot.add(model);
+  root.add(pivot);
+  const mixer = new THREE.AnimationMixer(model);
+  const clip = (n) => gl.animations.find((a) => a.name === n);
+  const A = {};
+  for (const n of ['idle', 'walk', 'run', 'attack', 'attack_charged']) if (clip(n)) A[n] = mixer.clipAction(clip(n));
+  for (const n of ['idle', 'walk', 'run']) if (A[n]) { A[n].play(); A[n].setEffectiveWeight(n === 'idle' ? 1 : 0); }
+  for (const n of ['attack', 'attack_charged']) if (A[n]) { A[n].setLoop(THREE.LoopOnce, 1); A[n].clampWhenFinished = false; }
+
+  const sword = setupModel(sw.scene, 1);
+  const hand = model.getObjectByName('RightHand');
+  const backSword = model.getObjectByName('BackSword');
+  if (hand) {
+    hand.add(sword);
+    sword.position.set(0, 8.5, 0);
+    sword.quaternion.set(-0.21225, 0.6745, 0.6745, 0.21225);
+    sword.scale.setScalar(100);
+  }
+  sword.visible = false;
+  const setDrawn = (d) => { sword.visible = d; if (backSword) backSword.visible = !d; };
+
+  const st = { speed: 0, oneShot: null, oneT: 0, oneDur: 0, dodge: -1 };
+  function playOnce(name, dur, drawn) {
+    const a = A[name] || A.attack;
+    if (!a) return;
+    if (st.oneShot && st.oneShot !== a) st.oneShot.stop();
+    a.reset();
+    a.timeScale = a.getClip().duration / dur;
+    a.setEffectiveWeight(1);
+    a.fadeIn(0.06).play();
+    st.oneShot = a; st.oneT = 0; st.oneDur = dur;
+    setDrawn(drawn);
+  }
+  function update(dt, speed01) {
+    st.speed = lerp(st.speed, speed01, 1 - Math.exp(-dt * 8));
+    const s = st.speed;
+    let wIdle = clamp(1 - s * 3, 0, 1), wWalk = clamp(s < 0.5 ? s * 3 : 2 - s * 2, 0, 1), wRun = clamp((s - 0.45) * 2.5, 0, 1);
+    const tot = wIdle + wWalk + wRun || 1;
+    let busy = 0;
+    if (st.oneShot) {
+      st.oneT += dt;
+      const t = st.oneT / st.oneDur;
+      busy = t < 0.85 ? 1 : clamp((1 - t) / 0.15, 0, 1);
+      st.oneShot.setEffectiveWeight(busy);
+      if (t >= 1) { st.oneShot.stop(); st.oneShot = null; setDrawn(false); busy = 0; }
+    }
+    const k = 1 - busy;
+    if (A.idle) A.idle.setEffectiveWeight(wIdle / tot * k);
+    if (A.walk) { A.walk.setEffectiveWeight(wWalk / tot * k); A.walk.timeScale = 0.8 + s * 0.8; }
+    if (A.run) A.run.setEffectiveWeight(wRun / tot * k);
+    mixer.update(dt);
+    if (st.dodge >= 0) {
+      st.dodge += dt;
+      const t = clamp(st.dodge / 0.45, 0, 1), b = Math.sin(t * Math.PI);
+      pivot.rotation.x = b * 0.55; pivot.position.y = -b * 0.25;
+      if (t >= 1) { st.dodge = -1; pivot.rotation.x = 0; pivot.position.y = 0; }
+    }
+  }
+  root.userData = {
+    update, st,
+    attack() { playOnce('attack', 0.62, true); },
+    cast() { playOnce('attack_charged', 0.7, false); },
+    dodge() { st.dodge = 0; },
+    isModel: true,
+  };
+  return root;
+}
+
+export async function loadRynModel() {
+  const gl = await new GLTFLoader().loadAsync('assets/models/ryn.glb');
+  const root = new THREE.Group();
+  const model = setupModel(gl.scene, 1.03);
+  root.add(model);
+  const mixer = new THREE.AnimationMixer(model);
+  const idle = gl.animations.find((a) => a.name === 'idle'), talk = gl.animations.find((a) => a.name === 'talk');
+  const aI = idle && mixer.clipAction(idle), aT = talk && mixer.clipAction(talk);
+  aI?.play(); aT?.play(); aT?.setEffectiveWeight(0);
+  let w = 0, talking = false;
+  mixer.update(Math.random() * 3);
+  root.userData.update = (dt) => {
+    w = lerp(w, talking ? 1 : 0, 1 - Math.exp(-dt * 5));
+    aI?.setEffectiveWeight(1 - w); aT?.setEffectiveWeight(w);
+    mixer.update(dt);
+  };
+  root.userData.setTalking = (b) => { talking = b; };
+  return root;
+}

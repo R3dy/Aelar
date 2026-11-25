@@ -6,7 +6,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildWorld, pathCurve, TEX } from './world.js';
 import * as L from './layout.js';
-import { makeHero, makeRyn } from './characters.js';
+import { makeHero, makeRyn, loadHeroModel, loadRynModel } from './characters.js';
 import { createHUD } from './hud.js';
 import { createFX } from './effects.js';
 import { clamp, lerp } from './util.js';
@@ -56,15 +56,21 @@ const loaded = new Promise((res) => { THREE.DefaultLoadingManager.onLoad = res; 
 const world = buildWorld(scene, quality);
 
 // ------------------------------------------------------------------ characters
-const hero = makeHero();
+let hero = makeHero();
 scene.add(hero);
-const ryn = makeRyn();
+let ryn = makeRyn();
 ryn.position.set(L.RYN.x, 0.1, L.RYN.z);
 ryn.rotation.y = 0.9;
 scene.add(ryn);
 world.colliders.push({ x: L.RYN.x, z: L.RYN.z, r: 0.5 });
 
 const fx = createFX(scene);
+
+// swap the placeholders for the Meshy models when they arrive (placeholders stay if loading fails)
+const modelsReady = Promise.all([
+  loadHeroModel().then((h) => { h.position.copy(hero.position); h.rotation.copy(hero.rotation); scene.remove(hero); scene.add(h); hero = h; }),
+  loadRynModel().then((r) => { r.position.copy(ryn.position); r.rotation.copy(ryn.rotation); scene.remove(ryn); scene.add(r); ryn = r; }),
+]).catch((e) => console.warn('character models failed to load, using placeholders', e));
 const hud = createHUD(document.getElementById('hud'));
 
 // ------------------------------------------------------------------ post-processing
@@ -195,6 +201,7 @@ const DIALOG = [
 ];
 function openDialog() {
   G.dialog = 0;
+  ryn.userData.setTalking?.(true);
   const d = document.getElementById('dialog');
   d.querySelector('.who').textContent = 'Master Ryn';
   d.querySelector('.txt').textContent = DIALOG[0];
@@ -205,7 +212,7 @@ document.getElementById('dialog').addEventListener('pointerdown', (e) => {
   G.dialog++;
   const d = document.getElementById('dialog');
   if (G.dialog >= DIALOG.length) {
-    d.style.display = 'none'; G.dialog = null;
+    d.style.display = 'none'; G.dialog = null; ryn.userData.setTalking?.(false);
     if (!G.talked) { G.talked = true; updateQuestHUD(); toast('Quest updated: Talk to Master Ryn ✓'); }
   } else d.querySelector('.txt').textContent = DIALOG[G.dialog];
 });
@@ -633,7 +640,7 @@ if (SHOT) {
 player.yaw = cam.yaw + Math.PI;
 player.pos.y = L.walkH(player.pos.x, player.pos.z) ?? 0;
 
-loaded.then(() => {
+Promise.all([loaded, modelsReady]).then(() => {
   renderMinimap();
   const ld = document.getElementById('loading');
   ld.style.opacity = '0';
