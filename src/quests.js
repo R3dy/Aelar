@@ -17,6 +17,17 @@ export const QUESTS = [
     outro: ['Master Ryn', 'Well done. You have earned a new technique: Whirlwind.'],
   },
   {
+    id: 'ambush', name: 'Ambush at the Bridge', obj: 'bandits', xp: 120, potions: 2,
+    intro: ['Master Ryn', 'Smoke by the bridge! Bandits have slipped into the valley. Drive them out!'],
+    steps: [{ ev: 'bandit', label: 'Defeat the straw bandits', need: 3 }],
+    outro: ['Master Ryn', 'They fled, but they dropped the archway charms as they ran. Find all four.'],
+  },
+  {
+    id: 'charms', name: 'Scattered Charms', obj: 'charm', xp: 100,
+    steps: [{ ev: 'charm', label: "Find Ryn's spirit charms", need: 4 }],
+    outro: ['Master Ryn', 'All four. The archway can be sealed again.'],
+  },
+  {
     id: 'ascend', name: 'Ascension', obj: 'arch', xp: 0,
     intro: ['Master Ryn', 'Go now. The archway is waiting for you.'],
     steps: [{ ev: 'arch', label: 'Walk through the archway' }],
@@ -24,13 +35,15 @@ export const QUESTS = [
 ];
 
 export function createQuests({ onStep, onQuestDone, onQuestStart, onChange }) {
-  const st = { i: 0, done: QUESTS.map((q) => q.steps.map(() => false)), over: false };
+  const st = { i: 0, done: QUESTS.map((q) => q.steps.map(() => false)), count: QUESTS.map((q) => q.steps.map(() => 0)), over: false };
   const cur = () => QUESTS[st.i];
   function event(ev) {
     if (st.over) return false;
     const q = cur();
     const k = q.steps.findIndex((s, j) => s.ev === ev && !st.done[st.i][j]);
     if (k < 0) return false;
+    st.count[st.i][k]++;
+    if (st.count[st.i][k] < (q.steps[k].need || 1)) { onChange?.(); return true; }
     st.done[st.i][k] = true;
     onStep?.(q, q.steps[k]);
     if (st.done[st.i].every(Boolean)) {
@@ -47,6 +60,7 @@ export function createQuests({ onStep, onQuestDone, onQuestStart, onChange }) {
     get index() { return st.i; },
     get over() { return st.over; },
     stepDone: (j) => st.done[st.i][j],
+    count: (j) => st.count[st.i][j],
     isActive: (id) => !st.over && cur().id === id,
     reached: (id) => QUESTS.findIndex((q) => q.id === id) <= st.i,
   };

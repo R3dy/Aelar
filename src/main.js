@@ -11,6 +11,7 @@ import { createHUD } from './hud.js';
 import { createFX } from './effects.js';
 import { clamp, lerp } from './util.js';
 import { QUESTS, createQuests } from './quests.js';
+import { createEnemies } from './enemies.js';
 import { sfx, unlockAudio, setMuted, isMuted, setFallsDistance } from './audio.js';
 
 const params = new URLSearchParams(location.search);
@@ -193,7 +194,7 @@ const G = {
   talked: false, ended: false,
   clock: 10 * 60 + 24,
   cds: [0, 0, 0, 0, 0, 0], cdMax: [4, 6, 5, 10, 2, 6], cost: [10, 20, 15, 30, 0, 15],
-  slot6: false, comboN: 0, chain: 0, lastAtk: -9, lastDodge: -9, shownQ: 0,
+  slot6: false, dead: false, deaths: 0, potionHint: false, comboN: 0, chain: 0, lastAtk: -9, lastDodge: -9, shownQ: 0,
   dialog: null, swing: 1, atkCd: 0, dodgeCd: 0,
   xp: 0, xpMax: 600, level: 1, objKey: null,
 };
@@ -206,7 +207,8 @@ function updateQuestHUD() {
   for (let j = 0; j < 3; j++) {
     const st = q.steps[j];
     if (!st) { hud.setQuest(j, null); continue; }
-    hud.setQuest(j, st.label, live ? Q.stepDone(j) : true);
+    const lbl = st.need ? `${st.label} (${live ? Q.count(j) : st.need}/${st.need})` : st.label;
+    hud.setQuest(j, lbl, live ? Q.stepDone(j) : true);
   }
 }
 hud.setXP(0, 600, 1);
@@ -218,18 +220,37 @@ function toast(msg, secs = 2.2) {
 }
 
 // current objective: the compass, path lights and the floating marker follow it, never further ahead
+const BRIDGE_W = new THREE.Vector3(4.2, 0, -13.2);
 const OBJ = {
-  ryn: { name: 'A Familiar Face', target: new THREE.Vector3(L.RYN.x, 0, L.RYN.z) },
-  dummies: { name: 'The Drill', target: new THREE.Vector3(L.DUMMIES[1][0], 0, L.DUMMIES[1][1]) },
-  arch: { name: 'Ascension', target: new THREE.Vector3(L.ARCH.x, L.PLAT, L.ARCH.z) },
+  ryn: { target: new THREE.Vector3(L.RYN.x, 0, L.RYN.z) },
+  dummies: { target: new THREE.Vector3(L.DUMMIES[1][0], 0, L.DUMMIES[1][1]) },
+  arch: { target: new THREE.Vector3(L.ARCH.x, L.PLAT, L.ARCH.z) },
+  bandits: { dynamic: true, target: BRIDGE_W.clone() },
+  charm: { dynamic: true, target: new THREE.Vector3() },
 };
+function updateDynamicObjective() {
+  if (G.objKey === 'bandits') {
+    const a = enemies.alive();
+    if (a.length) { OBJ.bandits.target.set(0, 0, 0); for (const e of a) OBJ.bandits.target.x += e.x / a.length, OBJ.bandits.target.z += e.z / a.length; }
+    else OBJ.bandits.target.copy(BRIDGE_W);
+  } else if (G.objKey === 'charm') {
+    let best = null, bd = 1e9;
+    for (const c of charms) if (!c.taken) { const d = Math.hypot(c.x - player.pos.x, c.z - player.pos.z); if (d < bd) { bd = d; best = c; } }
+    if (best) OBJ.charm.target.set(best.x, best.y, best.z);
+  }
+  if (OBJ[G.objKey].dynamic) {
+    const t = OBJ[G.objKey].target;
+    route = resample([[player.pos.x, player.pos.z], [t.x, t.z]]);
+  }
+}
 function objectiveKey() { if (SHOT) return 'arch'; return Q.over ? 'arch' : QUESTS[G.shownQ].obj; }
 function refreshObjective() {
   const k = objectiveKey();
   if (k === G.objKey) return;
   const first = G.objKey === null;
-  G.objKey = k; route = ROUTES[k];
-  if (!first && !SHOT) banner(OBJ[k].name);
+  G.objKey = k;
+  if (OBJ[k].dynamic) updateDynamicObjective(); else route = ROUTES[k];
+  if (!first && !SHOT) banner(QUESTS[G.shownQ].name);
 }
 let bannerTimer = 0;
 function banner(name) {
@@ -263,9 +284,10 @@ const Q = createQuests({
     if (q.xp) setTimeout(() => gainXP(q.xp, q.name), 350);
     if (q.unlockSlot !== undefined) setTimeout(() => unlockSlot6(), 1200);
     if (q.outro) setTimeout(() => say(...q.outro), 900);
+    if (q.potions) setTimeout(() => { G.potions += q.potions; hud.els.potion.textContent = G.potions; toast(`+${q.potions} Potions`); sfx.pickup(); }, 2000);
   },
   onQuestStart: (q) => {
-    setTimeout(() => { G.shownQ = Q.index; updateQuestHUD(); if (q.intro) say(...q.intro); }, q.unlockSlot !== undefined || QUESTS[Q.index - 1]?.outro ? 4200 : 1800);
+    setTimeout(() => { G.shownQ = Q.index; updateQuestHUD(); if (q.intro) say(...q.intro); startQuest(q.id); }, q.unlockSlot !== undefined || QUESTS[Q.index - 1]?.outro ? 4200 : 1800);
   },
   onChange: updateQuestHUD,
 });
@@ -302,9 +324,10 @@ function nearRyn() { return player.pos.distanceTo(new THREE.Vector3(L.RYN.x, pla
 // ------------------------------------------------------------------ combat
 const tmpV = new THREE.Vector3();
 function forward() { return new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); }
+function targets() { return [...world.dummies, ...enemies.alive()]; }
 function dummiesInArc(range, arc) {
   const f = forward();
-  return world.dummies.filter((d) => {
+  return targets().filter((d) => {
     tmpV.set(d.x - player.pos.x, 0, d.z - player.pos.z);
     const dist = tmpV.length();
     if (dist > range) return false;
@@ -313,7 +336,7 @@ function dummiesInArc(range, arc) {
 }
 function nearestDummy(range) {
   let best = null, bd = range;
-  for (const d of world.dummies) { const dd = Math.hypot(d.x - player.pos.x, d.z - player.pos.z); if (dd < bd) { bd = dd; best = d; } }
+  for (const d of targets()) { const dd = Math.hypot(d.x - player.pos.x, d.z - player.pos.z); if (dd < bd) { bd = dd; best = d; } }
   return best;
 }
 const dmgLayer = document.getElementById('hud');
@@ -329,18 +352,19 @@ for (const d of world.dummies) {
   });
 }
 function hitDummy(d, amount, color = '#ffe08a', kind = 'melee', heavy = false) {
-  d.wobble = 1; d.flash = 1;
-  fx.hitSpark(new THREE.Vector3(d.x, 1.9, d.z));
+  if (d.isEnemy && d.dead) return;
   const crit = Math.random() < 0.12;
   if (crit) amount = Math.round(amount * 1.6);
+  if (d.isEnemy) { enemies.damage(d, amount, heavy || crit); fx.hitSpark(new THREE.Vector3(d.x, 1.3, d.z)); }
+  else { d.wobble = 1; d.flash = 1; fx.hitSpark(new THREE.Vector3(d.x, 1.9, d.z)); }
   impact(heavy || crit ? 0.08 : 0.065, heavy ? 0.16 : crit ? 0.12 : 0.07);
-  sfx.hit('wood', heavy || crit);
+  sfx.hit(d.isEnemy ? 'straw' : 'wood', heavy || crit);
   const el = document.createElement('div');
   el.className = 'dmg' + (crit ? ' crit' : ''); el.textContent = crit ? amount + '!' : amount; el.style.color = crit ? '#ffcf3a' : color;
   el.style.fontSize = (crit ? 44 : 30) * hud.scale + 'px';
   dmgLayer.appendChild(el);
-  dmgs.push({ el, p: new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.6, 2.6, d.z), age: 0, crit });
-  if (kind === 'ability') Q.event('ability');
+  dmgs.push({ el, p: new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.6, d.isEnemy ? 2.3 + L.groundH(d.x, d.z) : 2.6, d.z), age: 0, crit });
+  if (kind === 'ability' && !d.isEnemy) Q.event('ability');
 }
 
 function popAt(p, text, color, size = 30) {
@@ -351,7 +375,7 @@ function popAt(p, text, color, size = 30) {
   dmgs.push({ el, p: p.clone(), age: 0, crit: false });
 }
 function attack() {
-  if (G.dialog !== null) return;
+  if (G.dialog !== null || G.dead) return;
   if (!G.talked && nearRyn()) { openDialog(); return; }
   if (G.atkCd > 0) return;
   const t = performance.now() / 1000;
@@ -375,7 +399,7 @@ function attack() {
   }, 260);
 }
 function dodge() {
-  if (G.dodgeCd > 0 || G.dialog !== null) return;
+  if (G.dodgeCd > 0 || G.dialog !== null || G.dead) return;
   G.dodgeCd = 0.8;
   player.dash = 0.32;
   const mv = moveInput.lengthSq() > 0.01 ? camRelative(moveInput) : forward();
@@ -387,12 +411,12 @@ function dodge() {
   fx.burst(player.pos.clone().add(new THREE.Vector3(0, 0.2, 0)), new THREE.Color(0xd8c8a0), 12, 2, 0.4, 0.3, 0.3);
 }
 function useAbility(i) {
-  if (G.dialog !== null) return;
+  if (G.dialog !== null || G.dead) return;
   if (G.cds[i] > 0) return;
   if (i === 4) {
     if (G.potions <= 0) { toast('No potions left'); sfx.error(); return; }
     sfx.cast('potion');
-    G.potions--; G.hp = G.hpMax; G.mp = Math.min(G.mpMax, G.mp + 40);
+    G.potions--; G.hp = G.hpMax; G.mp = Math.min(G.mpMax, G.mp + 40); document.getElementById('hurt').style.opacity = 0;
     hud.els.potion.textContent = G.potions;
     G.cds[4] = G.cdMax[4];
     fx.potion(player.pos);
@@ -420,7 +444,7 @@ function useAbility(i) {
     hero.userData.cast();
     const hitSet = new Set();
     fx.fireball(chest.clone().addScaledVector(f, 0.8), f, 16, (p) => {
-      for (const d of world.dummies) {
+      for (const d of targets()) {
         if (!hitSet.has(d) && Math.hypot(d.x - p.x, d.z - p.z) < 1.0) { hitSet.add(d); hitDummy(d, 41 + Math.floor(Math.random() * 9), '#ff9a3a', 'ability', true); return true; }
       }
       return false;
@@ -428,11 +452,111 @@ function useAbility(i) {
   } else if (i === 5) {
     hero.userData.attack(1);
     for (let k = 0; k < 4; k++) setTimeout(() => fx.slash(player.pos, player.yaw + k * Math.PI / 2, new THREE.Color(0xfff0c0), 1.9, 0.3), k * 70);
-    setTimeout(() => { for (const d of world.dummies) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 3.4) hitDummy(d, 22 + Math.floor(Math.random() * 7), '#fff2c8', 'ability', true); }, 200);
+    setTimeout(() => { for (const d of targets()) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 3.4) hitDummy(d, 22 + Math.floor(Math.random() * 7), '#fff2c8', 'ability', true); }, 200);
   } else if (i === 3) {
     hero.userData.cast();
     fx.vortex(player.pos.clone());
-    for (const d of world.dummies) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 5) hitDummy(d, 27 + Math.floor(Math.random() * 6), '#8fd8ff', 'ability', true);
+    for (const d of targets()) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 5) hitDummy(d, 27 + Math.floor(Math.random() * 6), '#8fd8ff', 'ability', true);
+  }
+}
+
+// ------------------------------------------------------------------ enemies, damage to the hero, death and respawn
+const enemies = createEnemies(scene, fx, {
+  playerPos: () => player.pos,
+  windup: () => sfx.windup(),
+  whoosh: () => sfx.whoosh(true),
+  hitPlayer: (e, dmg) => hurtPlayer(dmg),
+  onDeath: (e) => {
+    Q.event('bandit');
+    if (enemies.remaining === 1) spawnPickup('potion', e.x, e.z);
+  },
+});
+function hurtPlayer(dmg) {
+  if (G.dead) return;
+  const now = performance.now() / 1000;
+  if (now - G.lastDodge < 0.45 || player.dash > 0) { popAt(player.pos.clone().add(new THREE.Vector3(0, 2.2, 0)), 'Dodged!', '#9fe8ff', 24); return; }
+  G.hp = Math.max(0, G.hp - dmg);
+  impact(0.09, 0.22); sfx.hit('straw', true);
+  popAt(player.pos.clone().add(new THREE.Vector3(0.3, 2.0, 0)), '-' + dmg, '#ff5040', 30);
+  const hurt = document.getElementById('hurt');
+  hurt.style.transition = 'none'; hurt.style.opacity = 0.85; void hurt.offsetWidth;
+  hurt.style.transition = 'opacity .8s'; hurt.style.opacity = G.hp < G.hpMax * 0.35 ? 0.45 : 0;
+  if (G.hp <= 0) { die(); return; }
+  if (!G.potionHint && G.hp < G.hpMax * 0.5 && G.potions > 0) { G.potionHint = true; toast('Low health: drink a potion (slot 5)', 3); hud.els.slots[4].b.classList.add('hint'); setTimeout(() => hud.els.slots[4].b.classList.remove('hint'), 4000); }
+}
+function respawnPoint() { return Q.reached('ambush') ? new THREE.Vector3(1.2, 0, -6.0) : new THREE.Vector3(-0.35, 0, 7.2); }
+function die() {
+  G.dead = true; G.deaths++;
+  const dn = document.getElementById('down'); dn.style.display = 'flex'; requestAnimationFrame(() => dn.style.opacity = 1);
+  setTimeout(() => {
+    const p = respawnPoint();
+    player.pos.set(p.x, L.walkH(p.x, p.z) ?? 0, p.z);
+    G.hp = G.hpMax; G.potions = Math.max(G.potions, 3); hud.els.potion.textContent = G.potions;
+    enemies.reset();
+    document.getElementById('hurt').style.opacity = 0;
+    dn.style.opacity = 0; setTimeout(() => { dn.style.display = 'none'; }, 600);
+    G.dead = false;
+    if (G.deaths === 1) setTimeout(() => say('Master Ryn', 'Watch for the red glow, then roll. And drink a potion before you are too weak.', 5), 700);
+  }, 2200);
+}
+function startQuest(id) {
+  if (id === 'ambush') {
+    // smoke rises by the bridge, then the bandits appear one after another
+    for (let k = 0; k < 10; k++) setTimeout(() => fx.burst(new THREE.Vector3(5.2 + Math.random(), 0.8 + k * 0.4, -14.6), new THREE.Color(0x6a6460), 10, 0.8, 1.6, 1.2, 1.6), k * 250);
+    enemies.spawn(4.0, -14.2, 0.6); enemies.spawn(6.2, -12.4, 1.6); enemies.spawn(2.8, -11.4, 2.6);
+  } else if (id === 'charms') {
+    for (const c of charms) c.mesh.visible = c.glow.visible = true;
+  }
+}
+
+// spirit charms (quest 4) and pickups
+const CHARM_SPOTS = [[13.6, -15.6, 'by the waterfall'], [8.0, -16.0, 'under the bridge'], [24.0, -3.4, 'on the far bank'], [3.5, -20.4, 'by the watchtower path']];
+const charmMat = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x3aa8ff, emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.3, toneMapped: false });
+const charms = CHARM_SPOTS.map(([x, z, where]) => {
+  const y = (L.walkH(x, z) ?? L.groundH(x, z)) + 1.0;
+  const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), charmMat);
+  mesh.scale.set(1, 1.6, 1); mesh.position.set(x, y, z); mesh.visible = false; scene.add(mesh);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: 0x6ac8ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.scale.set(1.6, 1.6, 1); glow.position.copy(mesh.position); glow.visible = false; scene.add(glow);
+  return { x, y, z, where, mesh, glow, taken: false };
+});
+const pickups = [];
+function spawnPickup(kind, x, z) {
+  const grp = new THREE.Group();
+  const flask = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshStandardMaterial({ color: 0xff2030, emissive: 0xaa0010, emissiveIntensity: 0.8, roughness: 0.2 }));
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.14, 8), new THREE.MeshStandardMaterial({ color: 0xd8c8a8 }));
+  neck.position.y = 0.17; grp.add(flask, neck);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: 0xff5040, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
+  glow.scale.set(1.1, 1.1, 1); grp.add(glow);
+  const y = (L.walkH(x, z) ?? L.groundH(x, z)) + 0.45;
+  grp.position.set(x, y, z); scene.add(grp);
+  pickups.push({ kind, x, y, z, grp });
+}
+spawnPickup('potion', -3.6, -2.4);
+spawnPickup('potion', 26.6, -11.2);
+function updateCollectibles(dt) {
+  for (const c of charms) {
+    if (c.taken || !c.mesh.visible) continue;
+    c.mesh.rotation.y += dt * 2;
+    c.mesh.position.y = c.glow.position.y = c.y + Math.sin(T * 2.5 + c.x) * 0.12;
+    if (Math.random() < dt * 6) fx.burst(c.mesh.position.clone(), new THREE.Color(0x9fe8ff), 2, 0.6, 0.6, 0.18, 0.4);
+    if (!G.dead && Math.hypot(c.x - player.pos.x, c.z - player.pos.z) < 1.4) {
+      c.taken = true; c.mesh.visible = c.glow.visible = false;
+      fx.burst(c.mesh.position.clone(), new THREE.Color(0x9fe8ff), 30, 3, 0.7, 0.3, 0.6);
+      sfx.pickup(); gainXP(25, 'Charm');
+      Q.event('charm');
+      const left = charms.filter((q) => !q.taken).length;
+      if (left) toast(`Spirit charm found (${4 - left}/4)`);
+    }
+  }
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const p = pickups[i];
+    p.grp.rotation.y += dt * 1.5; p.grp.position.y = p.y + Math.sin(T * 3 + p.x) * 0.08;
+    if (!G.dead && Math.hypot(p.x - player.pos.x, p.z - player.pos.z) < 1.2) {
+      scene.remove(p.grp); pickups.splice(i, 1);
+      G.potions++; hud.els.potion.textContent = G.potions;
+      sfx.pickup(); toast('+1 Potion');
+    }
   }
 }
 
@@ -593,7 +717,7 @@ function movePlayer(dt) {
   if (keys.KeyA || keys.ArrowLeft) mv.x -= 1;
   if (keys.KeyD || keys.ArrowRight) mv.x += 1;
   if (mv.length() > 1) mv.normalize();
-  if (G.dialog !== null) mv.set(0, 0);
+  if (G.dialog !== null || G.dead) mv.set(0, 0);
   let dir = camRelative(mv);
   let speed = mv.length() * 5.2;
   if (player.dash > 0) { player.dash -= dt; dir = player.dashDir.clone(); speed = 11; }
@@ -678,8 +802,8 @@ function updateWorldHUD(dt) {
   // floating objective marker over the current target (Ryn has his own "!")
   const om = document.getElementById('objmark');
   const o = OBJ[G.objKey];
-  if (o && G.objKey !== 'ryn' && !G.ended && !SHOT) {
-    const tp = o.target.clone(); tp.y = (G.objKey === 'arch' ? L.PLAT + 5.6 : 3.2);
+  if (o && G.objKey !== 'ryn' && G.objKey !== 'bandits' && !G.ended && !SHOT) {
+    const tp = o.target.clone(); tp.y = G.objKey === 'arch' ? L.PLAT + 5.6 : G.objKey === 'charm' ? o.target.y + 0.9 : 3.2;
     const pp = project(tp);
     const dd = player.pos.distanceTo(o.target);
     om.style.display = pp.vis && dd > 3 ? 'block' : 'none';
@@ -729,6 +853,8 @@ function drawMinimap() {
     draw(r + rx * k, r + ry * k);
   };
   if (G.objKey === 'dummies') poi(OBJ.dummies.target.x, OBJ.dummies.target.z, (x, y) => { const pr = w * (0.035 + 0.015 * Math.sin(T * 5)); g.fillStyle = '#ff5a3a'; g.strokeStyle = '#000'; g.lineWidth = w * 0.012; g.beginPath(); g.arc(x, y, pr, 0, 7); g.fill(); g.stroke(); });
+  for (const e of enemies.alive()) poi(e.x, e.z, (x, y) => { g.fillStyle = '#e02020'; g.strokeStyle = '#000'; g.lineWidth = w * 0.01; g.beginPath(); g.arc(x, y, w * 0.025, 0, 7); g.fill(); g.stroke(); });
+  if (G.objKey === 'charm') poi(OBJ.charm.target.x, OBJ.charm.target.z, (x, y) => { const pr = w * (0.03 + 0.02 * Math.abs(Math.sin(T * 4))); g.fillStyle = '#7fd8ff'; g.strokeStyle = '#003050'; g.lineWidth = w * 0.012; g.beginPath(); g.arc(x, y, pr, 0, 7); g.fill(); g.stroke(); });
   if (!G.talked) poi(L.RYN.x, L.RYN.z, (x, y) => { g.fillStyle = '#ffd21f'; g.strokeStyle = '#000'; g.lineWidth = w * 0.012; g.beginPath(); g.arc(x, y, w * 0.035, 0, 7); g.fill(); g.stroke(); });
   poi(L.ARCH.x, L.ARCH.z, (x, y) => { g.fillStyle = '#ffcf4a'; g.strokeStyle = '#3a2400'; g.lineWidth = w * 0.01; g.beginPath(); g.moveTo(x, y - w * 0.04); g.lineTo(x + w * 0.03, y); g.lineTo(x, y + w * 0.04); g.lineTo(x - w * 0.03, y); g.closePath(); g.fill(); g.stroke(); });
   // player arrow (gold, pointing up)
@@ -767,6 +893,7 @@ function frame() {
   }
   // path lights toward the current objective: pulse travelling forward, hide those behind the player
   refreshObjective();
+  if (OBJ[G.objKey].dynamic && (T - (G.routeT || 0) > 0.4 || G.routeT === undefined)) { G.routeT = T; updateDynamicObjective(); }
   let nearest = 0, nd = 1e9;
   route.forEach((p, i) => { const d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z); if (d < nd) { nd = d; nearest = i; } });
   const first = Math.max(0, nearest - (SHOT ? 0 : 1));
@@ -807,6 +934,8 @@ function frame() {
   setFallsDistance(Math.hypot(player.pos.x - L.FALLS_X, player.pos.z + 19.5));
   if (sayTimer > 0) { sayTimer -= realDt; if (sayTimer <= 0) document.getElementById('say').style.display = 'none'; }
   updateLiveDummy(dt);
+  enemies.update(dt, T, project);
+  updateCollectibles(dt);
   if (bannerTimer > 0) { bannerTimer -= realDt; if (bannerTimer <= 0) document.getElementById('banner').classList.remove('show'); }
   if (mapImg.width) drawMinimap();
   updateWorldHUD(dt);
@@ -848,4 +977,4 @@ Promise.all([loaded, modelsReady]).then(() => {
   window.__ready = true;
 });
 frame();
-window.__game = { G, player, cam, camera, scene, renderer, L, resize, Q, LD, attack, useAbility, dodge };
+window.__game = { G, player, cam, camera, scene, renderer, L, resize, Q, LD, attack, useAbility, dodge, enemies, charms };
