@@ -271,7 +271,7 @@ function setupModel(scene, scale) {
 
 export async function loadHeroModel() {
   const loader = new GLTFLoader();
-  const [gl, sw] = await Promise.all([loader.loadAsync('assets/models/aelar.glb'), loader.loadAsync('assets/models/aelar_sword.glb')]);
+  const [gl, sw] = await Promise.all([loader.loadAsync('assets/models/aelar.gltf.json'), loader.loadAsync('assets/models/aelar_sword.gltf.json')]);
   const root = new THREE.Group();
   const model = setupModel(gl.scene, 1.04);
   const pivot = new THREE.Group(); // used for the dodge roll lean
@@ -344,7 +344,7 @@ export async function loadHeroModel() {
 }
 
 export async function loadRynModel() {
-  const gl = await new GLTFLoader().loadAsync('assets/models/ryn.glb');
+  const gl = await new GLTFLoader().loadAsync('assets/models/ryn.gltf.json');
   const root = new THREE.Group();
   const model = setupModel(gl.scene, 1.03);
   root.add(model);
