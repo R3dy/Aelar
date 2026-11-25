@@ -42,6 +42,11 @@ export function createHUD(root) {
   els.hpEmpty = box(196, 66, 262, 24, 'L'); els.hpEmpty.style.cssText += 'background:rgba(25,8,8,.82);clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);transform-origin:right;';
   els.mpEmpty = box(194, 100, 244, 22, 'L'); els.mpEmpty.style.cssText += 'background:rgba(8,10,28,.82);clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);';
   els.hpEmpty.style.display = 'none';
+  // XP bar under the mana bar
+  els.xpBack = box(200, 129, 232, 9, 'L', 'xpbar');
+  els.xpFill = document.createElement('div'); els.xpFill.className = 'fill'; els.xpBack.appendChild(els.xpFill);
+  els.xpText = text('XP 0 / 600', 316, 147, 12.5, 'L', 'center', 'xptext');
+  els.xpPopAt = box(440, 128, 0, 0, 'L');
   els.hpText = text('240 / 240', 364, 77, 17, 'L');
   els.mpText = text('100 / 100', 362, 111, 17, 'L');
 
@@ -80,6 +85,21 @@ export function createHUD(root) {
     return { b, cd, n };
   });
   els.potion = text('3', 950, 888, 21, 'C');
+  // slot 6 sits over the first padlock; its icon appears when the drill unlocks it
+  {
+    const b = box(974, 826, 76, 76, 'C', 'btn slot6');
+    const ic = document.createElement('canvas'); ic.width = ic.height = 128; ic.className = 'icon';
+    const g = ic.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 6, 64, 64, 64); gr.addColorStop(0, '#fff6d0'); gr.addColorStop(0.35, '#e0a030'); gr.addColorStop(1, '#2a1404');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#fff2c0'; g.lineCap = 'round';
+    for (let k = 0; k < 3; k++) { g.lineWidth = 9 - k * 2; g.globalAlpha = 1 - k * 0.25; g.beginPath(); g.arc(64, 64, 22 + k * 14, k * 2.1, k * 2.1 + 3.6); g.stroke(); }
+    g.globalAlpha = 1; g.fillStyle = '#fff'; g.font = 'bold 26px sans-serif'; g.fillText('6', 8, 28);
+    b.appendChild(ic);
+    const cd = document.createElement('div'); cd.className = 'cd'; b.appendChild(cd);
+    const n = document.createElement('div'); n.className = 'cdn t'; n.style.position = 'absolute'; b.appendChild(n);
+    els.slots.push({ b, cd, n });
+  }
 
   els.dodge = img('dodge', 'btn');
   els.attack = img('attack', 'btn');
@@ -157,6 +177,8 @@ export function createHUD(root) {
     els.hpEmpty.style.display = fh > 0.005 ? 'block' : 'none';
   }
   function setQuest(i, label, done) {
+    els.q[i].t.style.visibility = label === null ? 'hidden' : 'visible';
+    if (label === null) { els.q[i].c.style.display = 'none'; return; }
     els.q[i].t.querySelector('.qt').textContent = label;
     els.q[i].t.classList.toggle('done', done);
     els.q[i].c.style.display = done ? 'block' : 'none';
@@ -220,5 +242,21 @@ export function createHUD(root) {
     els.dist.style.left = W / 2 + (pd.box.x - REF_W / 2) * S + 'px';
   }
 
-  return { els, layoutAll, setBars, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
+  function setXP(xp, max, level) {
+    els.xpFill.style.width = (100 * xp / max) + '%';
+    els.xpText.textContent = `XP ${xp} / ${max}`;
+  }
+  function xpPop(str) {
+    const d = document.createElement('div');
+    d.className = 't xppop'; d.textContent = str;
+    d.style.fontSize = Math.max(13, 20 * S) + 'px';
+    d.style.left = els.xpPopAt.style.left; d.style.top = els.xpPopAt.style.top;
+    root.appendChild(d);
+    els.xpBack.classList.remove('glow'); void els.xpBack.offsetWidth; els.xpBack.classList.add('glow');
+    setTimeout(() => d.remove(), 1600);
+  }
+
+  function unlockSlot(i) { els.slots[i].b.classList.add('unlocked'); }
+
+  return { els, layoutAll, setBars, setXP, xpPop, unlockSlot, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
 }
