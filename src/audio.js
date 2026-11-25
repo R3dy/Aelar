@@ -140,3 +140,32 @@ export function setFallsDistance(d) {
   if (!fallsGain) return;
   fallsGain.gain.setTargetAtTime(0.03 + 0.35 * Math.max(0, 1 - d / 30), ctx.currentTime, 0.3);
 }
+
+// ---------------------------------------------------------------- boss music: drums and a low ostinato, scheduled ahead
+let music = null;
+export function startBossMusic() {
+  if (!started || music) return;
+  const bus = ctx.createGain(); bus.gain.value = 0.0001; bus.connect(master);
+  bus.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime + 1.5);
+  const bpm = 132, beat = 60 / bpm;
+  const bass = [55, 55, 65.4, 55, 49, 49, 58.3, 61.7];
+  let next = ctx.currentTime + 0.1, step = 0;
+  const timer = setInterval(() => {
+    while (next < ctx.currentTime + 0.4) {
+      const t = next;
+      if (step % 4 === 0 || step % 8 === 6) { tone(t, 0.35, { type: 'sine', f0: 110, f1: 40, peak: 0.6, out: bus }); noise(t, 0.12, { type: 'lowpass', f0: 400, f1: 80, peak: 0.4, out: bus }); }
+      if (step % 4 === 2) noise(t, 0.14, { type: 'bandpass', f0: 1800, f1: 900, q: 0.8, peak: 0.25, out: bus });
+      noise(t, 0.04, { type: 'highpass', f0: 7000, f1: 8000, q: 0.5, peak: 0.05, out: bus });
+      if (step % 2 === 0) { const f = bass[(step / 2) % 8]; tone(t, beat * 0.9, { type: 'sawtooth', f0: f, peak: 0.12, out: bus }); tone(t, beat * 0.9, { type: 'square', f0: f * 2, peak: 0.03, out: bus }); }
+      if (step % 16 === 0) for (const [f, d] of [[220, 0], [261.6, beat * 2], [246.9, beat * 4], [196, beat * 6]]) tone(t + d, beat * 1.8, { type: 'triangle', f0: f, peak: 0.06, a: 0.05, out: bus });
+      next += beat / 2; step++;
+    }
+  }, 100);
+  music = { bus, timer };
+}
+export function stopBossMusic() {
+  if (!music) return;
+  const m = music; music = null;
+  m.bus.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.6);
+  setTimeout(() => { clearInterval(m.timer); m.bus.disconnect(); }, 3000);
+}

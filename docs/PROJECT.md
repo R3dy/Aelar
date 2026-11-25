@@ -23,13 +23,15 @@ Fidelity targets:
 
 ## What the prototype includes
 
-- Third-person movement and camera, with touch controls (invisible drag zone on the left half; the reference shows no joystick)
-- Talking to Master Ryn
-- The three "Training Grounds" quest objectives: Talk to Master Ryn, Learn Combat (0/3), Use an Ability (0/1)
-- Four abilities with cooldowns, a potion with a count of 3, three locked slots
-- Hittable training dummies
-- Glowing path markers leading to the archway
-- Full HUD: portrait, level, health 240/240, mana 100/100, compass with distance, clock, minimap, quest tracker, menu buttons, attack and dodge buttons
+Updated 2026-11-25 with the quest chain from the [quest chain design](https://claude.ai/artifact/BxRi4e1nrm9gEve6ZrUvRg) (PRs #5 to #8):
+
+- Third-person movement and camera with touch controls (a joystick ring appears where the left thumb lands)
+- A six-quest chain (`src/quests.js`): A Familiar Face (talk to Ryn), The Drill (3-hit combo, ability, dodge the live dummy; unlocks Whirlwind in slot 6), Ambush at the Bridge (3 straw bandits), Scattered Charms (4 charms), The Sentinel Wakes (Stone Sentinel mini boss, blade drop), Ascension (level up to 2, pick a talent)
+- Enemies with telegraphed attacks (red glow, ground decal, sound), HP bars, damage to the hero, death and respawn, potion pickups
+- Stone Sentinel (`src/sentinel.js`): 600 HP, slam and sweep, a shockwave ring under 50% HP, boss bar, intro camera, slow-motion defeat
+- Progression: XP bar (600 XP total), level 2 with max HP 280, a three-branch talent pick (Blade, Flame, Frost) with locked Lv 3 teasers, the Sentinel-forged blade (+20% sword damage, orange glow)
+- Game feel: synthesized audio (`src/audio.js`), hit-stop, camera shake, white hit flash, crits, guidance that follows the current quest, New quest banners, an end card with run stats
+- Full HUD from the reference, plus the XP bar, slot 6 and the boss bar
 
 ## Technical approach
 

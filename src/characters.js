@@ -346,6 +346,13 @@ export async function loadHeroModel() {
     attack() { playOnce('attack', 0.62, true); },
     cast() { playOnce('attack_charged', 0.7, false); },
     dodge() { st.dodge = 0; },
+    setBladeGlow(color) {
+      for (const o of [sword, backSword]) o?.traverse((m) => {
+        if (!m.isMesh) return;
+        m.material = m.material.clone();
+        m.material.emissive = new THREE.Color(color); m.material.emissiveIntensity = 0.45;
+      });
+    },
     isModel: true,
   };
   return root;

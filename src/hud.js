@@ -48,6 +48,7 @@ export function createHUD(root) {
   els.xpText = text('XP 0 / 600', 316, 147, 12.5, 'L', 'center', 'xptext');
   els.xpPopAt = box(440, 128, 0, 0, 'L');
   els.hpText = text('240 / 240', 364, 77, 17, 'L');
+  els.lv = text('Lv 2', 57, 129, 16, 'L', 'center', 'lvtxt'); els.lv.style.display = 'none';
   els.mpText = text('100 / 100', 362, 111, 17, 'L');
 
   // compass (drawn), objective diamond and distance
@@ -256,7 +257,8 @@ export function createHUD(root) {
     setTimeout(() => d.remove(), 1600);
   }
 
+  function setLevel(n) { els.lv.textContent = `Lv ${n}`; els.lv.style.display = 'block'; els.lv.classList.add('up'); }
   function unlockSlot(i) { els.slots[i].b.classList.add('unlocked'); }
 
-  return { els, layoutAll, setBars, setXP, xpPop, unlockSlot, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
+  return { els, layoutAll, setBars, setXP, xpPop, unlockSlot, setLevel, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
 }
