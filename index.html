@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>Training Grounds</title>
+<style>
+@font-face { font-family: 'Fira Sans'; font-weight: 600; font-display: swap; src: url(assets/fonts/fira-sans-latin-600-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Fira Sans'; font-weight: 700; font-display: swap; src: url(assets/fonts/fira-sans-latin-700-normal.woff2) format('woff2'); }
+:root { --s: 1; --bg: #000; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: #fff; touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  font-family: 'Fira Sans', -apple-system, 'Segoe UI', Roboto, sans-serif; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud .p { position: absolute; transform-origin: 0 0; }
+#hud img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; }
+#hud .btn { pointer-events: auto; cursor: pointer; }
+#hud .btn:active, #hud .btn.pressed { filter: brightness(1.35); }
+.t { position: absolute; white-space: nowrap; font-weight: 600; color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 1px 1px 1px #000, -1px -1px 1px #000, 1px -1px 1px #000, -1px 1px 1px #000; line-height: 1; }
+.cd { position: absolute; inset: 0; border-radius: 6%; pointer-events: none; }
+.cdn { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.dim { filter: grayscale(0.8) brightness(0.55); }
+.qline.done .qt { color: #c9f27a; }
+.check { position: absolute; color: #ffd24a; font-weight: 700; display: none; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.qline.done .check { display: block; }
+#dialog { position: fixed; left: 50%; transform: translateX(-50%); width: min(78vw, 720px); pointer-events: auto; display: none;
+  background: linear-gradient(180deg, rgba(20,16,12,.92), rgba(30,22,14,.94)); border: 2px solid #c9a24a; border-radius: 10px;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 8px 30px rgba(0,0,0,.6); padding: 14px 18px 12px; }
+#dialog .who { color: #ffd84a; font-weight: 700; margin-bottom: 6px; }
+#dialog .txt { line-height: 1.35; color: #f4ece0; }
+#dialog .more { text-align: right; color: #c9a24a; font-size: .8em; margin-top: 6px; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); padding: 8px 22px; display: none; pointer-events: none;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.7) 20%, rgba(0,0,0,.7) 80%, rgba(0,0,0,0));
+  color: #ffd84a; font-weight: 700; text-shadow: 0 0 6px rgba(255,170,0,.6), 0 0 2px #000; white-space: nowrap; }
+.dmg { position: absolute; font-weight: 700; color: #ffe08a; pointer-events: none; text-shadow: 0 0 3px #000, 0 0 2px #000; white-space: nowrap; }
+.talk { position: absolute; pointer-events: auto; padding: .35em 1em; border-radius: 1em; background: rgba(20,16,12,.85); border: 2px solid #c9a24a; color: #ffd84a; font-weight: 700; display: none; transform: translate(-50%, 0); }
+#rotate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; background: #101418; color: #e8dcc0; text-align: center; font-size: 18px; z-index: 10; padding: 24px; }
+#rotate .ph { width: 54px; height: 92px; border: 3px solid #c9a24a; border-radius: 10px; animation: rot 2.2s ease-in-out infinite; }
+@keyframes rot { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) and (max-width: 900px) { #rotate { display: flex; } }
+#loading { position: fixed; inset: 0; background: #0d1014; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #e8dcc0; z-index: 20; transition: opacity .6s; }
+#loading .bar { width: 220px; height: 6px; background: #2a2a2a; border-radius: 3px; overflow: hidden; }
+#loading .bar div { height: 100%; width: 0; background: linear-gradient(90deg, #c9a24a, #ffd84a); transition: width .2s; }
+#fin { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; background: rgba(0,0,0,.55); z-index: 5; pointer-events: auto; text-align: center; }
+#fin h2 { margin: 0; color: #ffd84a; text-shadow: 0 0 10px rgba(255,170,0,.6); }
+#fin button { font: inherit; font-weight: 700; padding: 10px 26px; border-radius: 22px; border: 2px solid #c9a24a; background: #2a1f14; color: #ffd84a; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<div id="dialog"><div class="who"></div><div class="txt"></div><div class="more">Tap to continue ▸</div></div>
+<div id="toast"></div>
+<div id="fin"><h2>Training complete</h2><div>You have reached the end of the Training Grounds prototype.</div><button id="again">Play again</button></div>
+<div id="rotate"><div class="ph"></div><div>Turn your phone sideways to play</div></div>
+<div id="loading"><div>Training Grounds</div><div class="bar"><div></div></div></div>
+<script src="game.js"></script>
+</body>
+</html>

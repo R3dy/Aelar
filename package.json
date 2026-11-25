@@ -1,0 +1,19 @@
+{
+  "name": "aelar-training-grounds",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Training Grounds: a browser 3D prototype for iPhone, built with Three.js",
+  "scripts": {
+    "build": "./build.sh",
+    "serve": "cd dist && python3 -m http.server 8765",
+    "shot": "node tools/shot.js \"http://localhost:8765/?shot=1\" shot.png"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@fontsource/fira-sans": "5.0.0",
+    "esbuild": "0.24.0",
+    "playwright": "*"
+  }
+}
