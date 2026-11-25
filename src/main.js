@@ -80,7 +80,7 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.92);
 composer.addPass(bloom);
 const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, sat: { value: 1.0 }, contrast: { value: 1.05 }, vig: { value: 0.28 }, warm: { value: 0.03 } },
+  uniforms: { tDiffuse: { value: null }, sat: { value: 1.12 }, contrast: { value: 1.04 }, vig: { value: 0.22 }, warm: { value: 0.05 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float sat, contrast, vig, warm; varying vec2 vUv;
     void main(){ vec4 c = texture2D(tDiffuse, vUv);
@@ -178,7 +178,7 @@ const G = {
   dialog: null, swing: 1, atkCd: 0, dodgeCd: 0,
 };
 const player = { pos: new THREE.Vector3(-0.35, 0, 7.2), yaw: Math.PI, vel: new THREE.Vector3(), dash: 0, dashDir: new THREE.Vector3() };
-const cam = { yaw: 0, pitch: 0.06, dist: 2.7 };
+const cam = { yaw: 0, pitch: 0.07, dist: 2.25 };
 
 function updateQuestHUD() {
   hud.setQuest(0, 'Talk to Master Ryn', G.talked);
@@ -464,7 +464,7 @@ const camTarget = new THREE.Vector3();
 function updateCamera(dt, snap) {
   // over-the-shoulder: look point is offset to the hero's right, as in the reference
   const right = new THREE.Vector3(-Math.cos(cam.yaw), 0, Math.sin(cam.yaw)).multiplyScalar(-1);
-  const want = player.pos.clone().add(new THREE.Vector3(0, 1.95, 0)).addScaledVector(right, 0.85);
+  const want = player.pos.clone().add(new THREE.Vector3(0, 1.95, 0)).addScaledVector(right, 0.72);
   if (snap) camTarget.copy(want); else camTarget.lerp(want, 1 - Math.exp(-dt * 10));
   const cp = Math.cos(cam.pitch);
   const off = new THREE.Vector3(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).multiplyScalar(cam.dist);
