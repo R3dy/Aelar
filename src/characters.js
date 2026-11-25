@@ -287,6 +287,14 @@ export async function loadHeroModel() {
   const sword = setupModel(sw.scene, 1);
   const hand = model.getObjectByName('RightHand');
   const backSword = model.getObjectByName('BackSword');
+  // The sheathed sword came skinned across several bones, so it bent like cloth when he turned.
+  // Bind every vertex fully to the chest bone so it moves as one rigid piece.
+  if (backSword?.isSkinnedMesh) {
+    const bi = backSword.skeleton.bones.findIndex((b) => b.name === 'Spine');
+    const g = backSword.geometry, sj = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+    if (bi >= 0) for (let i = 0; i < sj.count; i++) { sj.setXYZW(i, bi, 0, 0, 0); sw.setXYZW(i, 1, 0, 0, 0); }
+    sj.needsUpdate = sw.needsUpdate = true;
+  }
   if (hand) {
     hand.add(sword);
     sword.position.set(0, 8.5, 0);
