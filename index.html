@@ -47,9 +47,36 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 #loading { position: fixed; inset: 0; background: #0d1014; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: #e8dcc0; z-index: 20; transition: opacity .6s; }
 #loading .bar { width: 220px; height: 6px; background: #2a2a2a; border-radius: 3px; overflow: hidden; }
 #loading .bar div { height: 100%; width: 0; background: linear-gradient(90deg, #c9a24a, #ffd84a); transition: width .2s; }
-#fin { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; background: rgba(0,0,0,.55); z-index: 5; pointer-events: auto; text-align: center; }
-#fin h2 { margin: 0; color: #ffd84a; text-shadow: 0 0 10px rgba(255,170,0,.6); }
-#fin button { font: inherit; font-weight: 700; padding: 10px 26px; border-radius: 22px; border: 2px solid #c9a24a; background: #2a1f14; color: #ffd84a; }
+#fin, #reward, #talents { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.55); z-index: 5; pointer-events: auto; text-align: center; }
+.card { background: linear-gradient(180deg, rgba(28,22,14,.96), rgba(18,14,10,.97)); border: 2px solid #c9a24a; border-radius: 12px; box-shadow: 0 0 0 2px rgba(0,0,0,.6), 0 10px 40px rgba(0,0,0,.7); padding: 14px 22px 16px; max-width: 92vw; max-height: 92vh; overflow: auto; }
+.card h2, .card h3 { margin: 2px 0 6px; color: #ffd84a; text-shadow: 0 0 10px rgba(255,170,0,.6); }
+.card .sub { color: #e8dcc0; font-size: .9em; }
+.card button { font: inherit; font-weight: 700; padding: 9px 24px; border-radius: 22px; border: 2px solid #c9a24a; background: #2a1f14; color: #ffd84a; cursor: pointer; }
+#fin .stats { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 12px auto; text-align: left; color: #d8ccb0; font-size: .92em; }
+#fin .stats b { color: #fff; text-align: right; }
+#fin .row { display: flex; gap: 12px; justify-content: center; }
+#boss { position: fixed; left: 50%; top: 13%; transform: translateX(-50%); width: min(46vw, 520px); display: none; pointer-events: none; text-align: center; }
+#boss .nm { color: #ffcf8a; font-weight: 700; font-size: clamp(13px, 2.6vh, 20px); text-shadow: 0 0 3px #000, 0 0 2px #000; letter-spacing: .08em; }
+#boss .bar { height: clamp(8px, 1.8vh, 14px); margin-top: 3px; background: rgba(0,0,0,.75); border: 1px solid #c9a24a; border-radius: 4px; overflow: hidden; }
+#boss .fill { height: 100%; width: 100%; background: linear-gradient(#ff8a3a, #b02a10); transition: width .25s; }
+#reward .k { color: #e8c870; letter-spacing: .25em; font-size: .75em; text-transform: uppercase; }
+#reward .sw { width: 10px; height: 90px; margin: 8px auto; background: linear-gradient(#fff, #d8d0c8 40%, #9a9088); box-shadow: 0 0 14px 3px rgba(255,120,30,.8); border-radius: 3px 3px 0 0; }
+#reward .d { color: #9fe870; font-weight: 700; margin-bottom: 12px; }
+#reward .d span { color: #c8bca0; font-weight: 600; font-size: .85em; }
+#levelup { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; pointer-events: none; z-index: 6; background: radial-gradient(ellipse at center, rgba(255,200,60,.35), rgba(0,0,0,0) 60%); animation: lvin .5s ease-out; }
+#levelup .big { font-weight: 700; font-size: clamp(34px, 11vh, 90px); color: #ffe27a; letter-spacing: .08em; text-shadow: 0 0 24px rgba(255,170,0,.95), 0 0 4px #000; }
+#levelup .lv { font-weight: 700; color: #fff; font-size: clamp(16px, 4vh, 32px); text-shadow: 0 0 4px #000; }
+#levelup .d { color: #ffe9b0; margin-top: 6px; text-shadow: 0 0 3px #000; }
+@keyframes lvin { 0% { transform: scale(1.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+#talents .cols { display: flex; gap: 12px; margin-top: 6px; }
+#talents .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+#talents .br { font-weight: 700; font-size: 1.05em; }
+#talents button { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; text-align: left; }
+#talents button b { color: #ffd84a; }
+#talents button span { color: #e0d4b8; font-weight: 600; font-size: .82em; line-height: 1.25; }
+#talents .lock { color: #8a8070; font-size: .75em; border: 1px dashed #4a4030; border-radius: 8px; padding: 6px 8px; text-align: left; }
+.lvtxt { background: #1d140c; border-radius: 6px; padding: 1px 4px; color: #ffe27a; }
+.lvtxt.up { animation: unlockglow 1.2s ease-out 3; }
 #hud .xpbar { background: rgba(10,8,4,.75); border: 1px solid rgba(201,162,74,.8); border-radius: 4px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
 #hud .xpbar .fill { height: 100%; width: 0; background: linear-gradient(90deg, #b07a18, #ffd84a); transition: width .6s cubic-bezier(.2,.8,.2,1); }
 #hud .xpbar.glow { animation: xpglow .9s ease-out; }
@@ -98,7 +125,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 <div id="banner"><div class="k">New quest</div><div class="n"></div><div class="ln"></div></div>
 <div id="objmark"><div class="g">◆</div><div class="d"></div></div>
 <div id="stick"><div></div></div>
-<div id="fin"><h2>Training complete</h2><div>You have reached the end of the Training Grounds prototype.</div><button id="again">Play again</button></div>
+<div id="fin"><div class="card"><h2>Training complete</h2><div class="sub">Aelar is ready to leave the valley.</div><div class="stats"></div><div class="row"><button id="keep">Keep training</button><button id="again">Play again</button></div></div></div>
+<div id="boss"><div class="nm">Stone Sentinel</div><div class="bar"><div class="fill"></div></div></div>
+<div id="reward"><div class="card"><div class="k">New gear</div><h3>Sentinel-forged Blade</h3><div class="sw"></div><div class="d">+20% sword damage<br><span>A faint ember glows along its edge.</span></div><button id="equip">Equip</button></div></div>
+<div id="levelup"><div class="big">LEVEL UP</div><div class="lv">Level 2</div><div class="d">Max HP 240 → 280 · 1 talent point</div></div>
+<div id="talents"><div class="card"><h3>Choose a talent</h3><div class="cols">
+<div class="col"><div class="br" style="color:#ffe6b0">Blade</div><button data-t="blade"><b>Crushing Third Strike</b><span>Combo hit 3 deals double damage and knocks enemies back</span></button><div class="lock">🔒 Lv 3: Dodge-cancel into a dash strike</div></div>
+<div class="col"><div class="br" style="color:#ff9a3a">Flame</div><button data-t="flame"><b>Lingering Embers</b><span>Fire abilities leave a burning patch for 3 s</span></button><div class="lock">🔒 Lv 3: Flame slash costs no mana after a perfect dodge</div></div>
+<div class="col"><div class="br" style="color:#8fd8ff">Frost</div><button data-t="frost"><b>Biting Cold</b><span>Frost abilities slow enemies by 40% for 2 s</span></button><div class="lock">🔒 Lv 3: Frost nova freezes enemies solid</div></div>
+</div></div></div>
 <div id="rotate"><div class="ph"></div><div>Turn your phone sideways to play</div></div>
 <div id="loading"><div>Training Grounds</div><div class="bar"><div></div></div></div>
 <script src="game.js"></script>

@@ -113,6 +113,7 @@ export function createEnemies(scene, fx, hooks) {
       const face = Math.atan2(dx, dz);
       let dy = face - e.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       e.stagger = Math.max(0, e.stagger - dt);
+      const slow = e.slowT > 0 ? 0.6 : 1; e.slowT = Math.max(0, (e.slowT || 0) - dt);
       if (e.state !== 'lunge') e.yaw += dy * (1 - Math.exp(-dt * (e.state === 'windup' ? 3 : 7)));
       e.t += dt;
       let moving = 0;
@@ -123,7 +124,7 @@ export function createEnemies(scene, fx, hooks) {
         if (!token && dist < 6) token = e;
         const want = token === e ? 1.7 : 3.6;
         if (dist > want + 0.2) {
-          const sp = (token === e ? 3.2 : 2.4) * dt;
+          const sp = (token === e ? 3.2 : 2.4) * dt * slow;
           tryMove(e, dx / dist * sp, dz / dist * sp); moving = 1;
         } else if (token !== e) {
           // strafe around the hero

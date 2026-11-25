@@ -25,11 +25,19 @@ export const QUESTS = [
   {
     id: 'charms', name: 'Scattered Charms', obj: 'charm', xp: 100,
     steps: [{ ev: 'charm', label: "Find Ryn's spirit charms", need: 4 }],
-    outro: ['Master Ryn', 'All four. The archway can be sealed again.'],
+    outro: ['Master Ryn', 'All four! Wait... do you feel that? The ground is shaking.'],
+  },
+  {
+    id: 'sentinel', name: 'The Sentinel Wakes', obj: 'sentinel', xp: 200,
+    intro: ['Master Ryn', 'The charms woke the archway\'s guardian, and it no longer knows you! Strike after it slams!'],
+    steps: [
+      { ev: 'sentinel', label: 'Defeat the Stone Sentinel' },
+      { ev: 'blade', label: "Claim the Sentinel's blade" },
+    ],
+    outro: ['Master Ryn', 'You are ready, Aelar. Walk through the archway.'],
   },
   {
     id: 'ascend', name: 'Ascension', obj: 'arch', xp: 0,
-    intro: ['Master Ryn', 'Go now. The archway is waiting for you.'],
     steps: [{ ev: 'arch', label: 'Walk through the archway' }],
   },
 ];
