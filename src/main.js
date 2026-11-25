@@ -10,6 +10,7 @@ import { makeHero, makeRyn, loadHeroModel, loadRynModel } from './characters.js'
 import { createHUD } from './hud.js';
 import { createFX } from './effects.js';
 import { clamp, lerp } from './util.js';
+import { QUESTS, createQuests } from './quests.js';
 import { sfx, unlockAudio, setMuted, isMuted, setFallsDistance } from './audio.js';
 
 const params = new URLSearchParams(location.search);
@@ -189,9 +190,10 @@ function renderMinimap() {
 // ------------------------------------------------------------------ game state
 const G = {
   hp: 240, hpMax: 240, mp: 100, mpMax: 100, potions: 3,
-  talked: false, combat: 0, ability: 0, finished: false, ended: false,
+  talked: false, ended: false,
   clock: 10 * 60 + 24,
-  cds: [0, 0, 0, 0, 0], cdMax: [4, 6, 5, 10, 2], cost: [10, 20, 15, 30, 0],
+  cds: [0, 0, 0, 0, 0, 0], cdMax: [4, 6, 5, 10, 2, 6], cost: [10, 20, 15, 30, 0, 15],
+  slot6: false, comboN: 0, chain: 0, lastAtk: -9, lastDodge: -9, shownQ: 0,
   dialog: null, swing: 1, atkCd: 0, dodgeCd: 0,
   xp: 0, xpMax: 600, level: 1, objKey: null,
 };
@@ -199,11 +201,14 @@ const player = { pos: new THREE.Vector3(-0.35, 0, 7.2), yaw: Math.PI, vel: new T
 const cam = { yaw: 0, pitch: 0.07, dist: 2.25 };
 
 function updateQuestHUD() {
-  hud.setQuest(0, 'Talk to Master Ryn', G.talked);
-  hud.setQuest(1, `Learn Combat (${G.combat}/3)`, G.combat >= 3);
-  hud.setQuest(2, `Use an Ability (${G.ability}/1)`, G.ability >= 1);
+  // show the quest the player was told about; a finished quest stays ticked for a moment before the next appears
+  const q = QUESTS[G.shownQ], live = G.shownQ === Q.index;
+  for (let j = 0; j < 3; j++) {
+    const st = q.steps[j];
+    if (!st) { hud.setQuest(j, null); continue; }
+    hud.setQuest(j, st.label, live ? Q.stepDone(j) : true);
+  }
 }
-updateQuestHUD();
 hud.setXP(0, 600, 1);
 
 let toastTimer = 0;
@@ -218,7 +223,7 @@ const OBJ = {
   dummies: { name: 'The Drill', target: new THREE.Vector3(L.DUMMIES[1][0], 0, L.DUMMIES[1][1]) },
   arch: { name: 'Ascension', target: new THREE.Vector3(L.ARCH.x, L.PLAT, L.ARCH.z) },
 };
-function objectiveKey() { if (SHOT) return 'arch'; return !G.talked ? 'ryn' : !G.finished ? 'dummies' : 'arch'; }
+function objectiveKey() { if (SHOT) return 'arch'; return Q.over ? 'arch' : QUESTS[G.shownQ].obj; }
 function refreshObjective() {
   const k = objectiveKey();
   if (k === G.objKey) return;
@@ -233,6 +238,12 @@ function banner(name) {
   b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
   bannerTimer = 3.2;
 }
+let sayTimer = 0;
+function say(who, text, secs = 4.2) {
+  const el = document.getElementById('say');
+  el.querySelector('.w').textContent = who; el.querySelector('.x').textContent = text;
+  el.style.display = 'block'; sayTimer = secs;
+}
 function gainXP(n, label = '') {
   G.xp = Math.min(G.xpMax, G.xp + n);
   hud.setXP(G.xp, G.xpMax, G.level);
@@ -243,9 +254,29 @@ function gainXP(n, label = '') {
 const DIALOG = [
   'Ah, Aelar. You came. Good.',
   'Before you leave the valley, you must show me you can hold your own.',
-  'Strike the training dummies three times. Then call on one of your abilities, any of them.',
-  'When you are done, follow the golden lights up the stairs to the archway.',
+  'Cross the bridge to the training dummies. Strike three times without pause, then call on one of your abilities.',
+  'And watch the old dummy on the end. It still swings back. When it glows red, roll away.',
 ];
+const Q = createQuests({
+  onStep: (q, st) => { sfx.chime(); toast(`${st.label} ✓`); },
+  onQuestDone: (q) => {
+    if (q.xp) setTimeout(() => gainXP(q.xp, q.name), 350);
+    if (q.unlockSlot !== undefined) setTimeout(() => unlockSlot6(), 1200);
+    if (q.outro) setTimeout(() => say(...q.outro), 900);
+  },
+  onQuestStart: (q) => {
+    setTimeout(() => { G.shownQ = Q.index; updateQuestHUD(); if (q.intro) say(...q.intro); }, q.unlockSlot !== undefined || QUESTS[Q.index - 1]?.outro ? 4200 : 1800);
+  },
+  onChange: updateQuestHUD,
+});
+updateQuestHUD();
+function unlockSlot6() {
+  G.slot6 = true;
+  hud.unlockSlot(5);
+  sfx.fanfare();
+  toast('New ability: Whirlwind (slot 6)', 3);
+}
+
 function openDialog() {
   G.dialog = 0;
   ryn.userData.setTalking?.(true);
@@ -261,17 +292,10 @@ document.getElementById('dialog').addEventListener('pointerdown', (e) => {
   const d = document.getElementById('dialog');
   if (G.dialog >= DIALOG.length) {
     d.style.display = 'none'; G.dialog = null; ryn.userData.setTalking?.(false);
-    if (!G.talked) { G.talked = true; updateQuestHUD(); toast('Quest updated: Talk to Master Ryn ✓'); sfx.chime(); gainXP(20); }
+    if (!G.talked) { G.talked = true; Q.event('talk'); }
   } else d.querySelector('.txt').textContent = DIALOG[G.dialog];
 });
 document.getElementById('again').addEventListener('pointerdown', () => location.reload());
-
-function checkFinished() {
-  if (!G.finished && G.talked && G.combat >= 3 && G.ability >= 1) {
-    G.finished = true;
-    setTimeout(() => { toast('Training complete! Head to the archway', 3.2); sfx.chime(); }, 600);
-  }
-}
 
 function nearRyn() { return player.pos.distanceTo(new THREE.Vector3(L.RYN.x, player.pos.y, L.RYN.z)) < 3.2; }
 
@@ -304,7 +328,7 @@ for (const d of world.dummies) {
     for (const mm of [].concat(m.material)) { if (mm.emissive) { mm.emissive.set(0xffffff); mm.emissiveIntensity = 0; d.mats.push(mm); } }
   });
 }
-function hitDummy(d, amount, color = '#ffe08a', countsForCombat = false, heavy = false) {
+function hitDummy(d, amount, color = '#ffe08a', kind = 'melee', heavy = false) {
   d.wobble = 1; d.flash = 1;
   fx.hitSpark(new THREE.Vector3(d.x, 1.9, d.z));
   const crit = Math.random() < 0.12;
@@ -316,24 +340,38 @@ function hitDummy(d, amount, color = '#ffe08a', countsForCombat = false, heavy =
   el.style.fontSize = (crit ? 44 : 30) * hud.scale + 'px';
   dmgLayer.appendChild(el);
   dmgs.push({ el, p: new THREE.Vector3(d.x + (Math.random() - 0.5) * 0.6, 2.6, d.z), age: 0, crit });
-  if (countsForCombat) {
-    if (!G.talked) { toast('Talk to Master Ryn first'); return; }
-    if (G.combat < 3) { G.combat++; updateQuestHUD(); if (G.combat === 3) { toast('Quest updated: Learn Combat ✓'); sfx.chime(); gainXP(40); } checkFinished(); }
-  }
+  if (kind === 'ability') Q.event('ability');
 }
 
+function popAt(p, text, color, size = 30) {
+  const el = document.createElement('div');
+  el.className = 'dmg'; el.textContent = text; el.style.color = color;
+  el.style.fontSize = size * hud.scale + 'px';
+  dmgLayer.appendChild(el);
+  dmgs.push({ el, p: p.clone(), age: 0, crit: false });
+}
 function attack() {
   if (G.dialog !== null) return;
   if (!G.talked && nearRyn()) { openDialog(); return; }
   if (G.atkCd > 0) return;
-  G.atkCd = 0.55;
+  const t = performance.now() / 1000;
+  G.comboN = t - G.lastAtk < 1.05 ? G.comboN % 3 + 1 : 1;
+  G.lastAtk = t;
+  const n = G.comboN, third = n === 3;
+  G.atkCd = third ? 0.62 : 0.4;
   G.swing *= -1;
   hero.userData.attack(G.swing);
-  setTimeout(() => sfx.whoosh(), 180);
+  setTimeout(() => sfx.whoosh(third), 180);
   setTimeout(() => {
     const yaw = player.yaw;
-    fx.slash(player.pos, yaw, new THREE.Color(0xffe6b0), 1.6, 0.35);
-    for (const d of dummiesInArc(2.9, 2.2)) hitDummy(d, 12 + Math.floor(Math.random() * 6), '#fff2c8', true);
+    fx.slash(player.pos, yaw, new THREE.Color(third ? 0xffc870 : 0xffe6b0), third ? 2.1 : 1.6, third ? 0.5 : 0.35);
+    const hits = dummiesInArc(third ? 3.3 : 2.9, third ? 2.6 : 2.2);
+    for (const d of hits) hitDummy(d, Math.round((12 + Math.floor(Math.random() * 6)) * (third ? 1.6 : 1)), '#fff2c8', 'melee', third);
+    if (hits.length) {
+      G.chain = n === 1 ? 1 : G.chain === n - 1 ? n : 0;
+      if (n > 1 && G.chain === n) popAt(player.pos.clone().add(new THREE.Vector3(0, 2.3, 0)), `Combo ×${n}`, '#ffd84a', 26);
+      if (G.chain === 3) Q.event('combo');
+    } else G.chain = 0;
   }, 260);
 }
 function dodge() {
@@ -345,6 +383,7 @@ function dodge() {
   player.yaw = Math.atan2(player.dashDir.x, player.dashDir.z);
   hero.userData.dodge();
   sfx.dodge();
+  G.lastDodge = performance.now() / 1000;
   fx.burst(player.pos.clone().add(new THREE.Vector3(0, 0.2, 0)), new THREE.Color(0xd8c8a0), 12, 2, 0.4, 0.3, 0.3);
 }
 function useAbility(i) {
@@ -359,8 +398,9 @@ function useAbility(i) {
     fx.potion(player.pos);
     return;
   }
+  if (i === 5 && !G.slot6) { toast('Locked: finish the drill to learn it'); sfx.error(); return; }
   if (G.mp < G.cost[i]) { toast('Not enough mana'); sfx.error(); return; }
-  sfx.cast(['slash', 'bolt', 'fire', 'vortex'][i]);
+  sfx.cast(['slash', 'bolt', 'fire', 'vortex', '', 'slash'][i]);
   G.mp -= G.cost[i];
   G.cds[i] = G.cdMax[i];
   const f = forward();
@@ -369,29 +409,83 @@ function useAbility(i) {
     hero.userData.attack(1);
     setTimeout(() => {
       fx.slash(player.pos, player.yaw);
-      for (const d of dummiesInArc(3.8, 2.4)) hitDummy(d, 34 + Math.floor(Math.random() * 8), '#ffb347', false, true);
+      for (const d of dummiesInArc(3.8, 2.4)) hitDummy(d, 34 + Math.floor(Math.random() * 8), '#ffb347', 'ability', true);
     }, 250);
   } else if (i === 1) {
     hero.userData.cast();
     const d = nearestDummy(16);
     const end = d ? new THREE.Vector3(d.x, 1.7, d.z) : chest.clone().addScaledVector(f, 9);
-    setTimeout(() => { fx.bolt(chest.clone().addScaledVector(f, 0.5).add(new THREE.Vector3(0, 0.4, 0)), end); if (d) hitDummy(d, 48 + Math.floor(Math.random() * 10), '#8fd8ff', false, true); }, 120);
+    setTimeout(() => { fx.bolt(chest.clone().addScaledVector(f, 0.5).add(new THREE.Vector3(0, 0.4, 0)), end); if (d) hitDummy(d, 48 + Math.floor(Math.random() * 10), '#8fd8ff', 'ability', true); }, 120);
   } else if (i === 2) {
     hero.userData.cast();
     const hitSet = new Set();
     fx.fireball(chest.clone().addScaledVector(f, 0.8), f, 16, (p) => {
       for (const d of world.dummies) {
-        if (!hitSet.has(d) && Math.hypot(d.x - p.x, d.z - p.z) < 1.0) { hitSet.add(d); hitDummy(d, 41 + Math.floor(Math.random() * 9), '#ff9a3a', false, true); return true; }
+        if (!hitSet.has(d) && Math.hypot(d.x - p.x, d.z - p.z) < 1.0) { hitSet.add(d); hitDummy(d, 41 + Math.floor(Math.random() * 9), '#ff9a3a', 'ability', true); return true; }
       }
       return false;
     });
+  } else if (i === 5) {
+    hero.userData.attack(1);
+    for (let k = 0; k < 4; k++) setTimeout(() => fx.slash(player.pos, player.yaw + k * Math.PI / 2, new THREE.Color(0xfff0c0), 1.9, 0.3), k * 70);
+    setTimeout(() => { for (const d of world.dummies) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 3.4) hitDummy(d, 22 + Math.floor(Math.random() * 7), '#fff2c8', 'ability', true); }, 200);
   } else if (i === 3) {
     hero.userData.cast();
     fx.vortex(player.pos.clone());
-    for (const d of world.dummies) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 5) hitDummy(d, 27 + Math.floor(Math.random() * 6), '#8fd8ff', false, true);
+    for (const d of world.dummies) if (Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 5) hitDummy(d, 27 + Math.floor(Math.random() * 6), '#8fd8ff', 'ability', true);
   }
-  if (!G.talked) { toast('Talk to Master Ryn first'); return; }
-  if (G.ability < 1) { G.ability = 1; updateQuestHUD(); toast('Quest updated: Use an Ability ✓'); sfx.chime(); gainXP(40); checkFinished(); }
+}
+
+// ------------------------------------------------------------------ the live dummy (teaches dodging)
+const LD = { d: world.dummies[0], state: 'idle', t: 0, cd: 1.5, hintShown: 0 };
+const decal = new THREE.Mesh(new THREE.RingGeometry(0.15, 1, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
+decal.rotation.x = -Math.PI / 2; decal.visible = false; scene.add(decal);
+const LD_REACH = 2.9;
+function setLDGlow(r, g, b, k) { for (const mm of LD.d.mats) { mm.emissive.setRGB(r, g, b); mm.emissiveIntensity = k; } }
+function updateLiveDummy(dt) {
+  const d = LD.d;
+  const active = Q.isActive('drill') && G.shownQ === Q.index;
+  const dx = player.pos.x - d.x, dz = player.pos.z - d.z, dist = Math.hypot(dx, dz);
+  if (!active) { decal.visible = false; if (LD.state !== 'idle') { LD.state = 'idle'; d.body.rotation.y = 0; } return; }
+  // turn to face the hero
+  const want = Math.atan2(dx, dz);
+  let dr = want - d.group.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+  d.group.rotation.y += dr * (1 - Math.exp(-dt * 4));
+  if (LD.state === 'idle') {
+    LD.cd -= dt;
+    if (dist < 3.6 && LD.cd <= 0) { LD.state = 'windup'; LD.t = 0; sfx.windup(); }
+  } else if (LD.state === 'windup') {
+    LD.t += dt;
+    const k = Math.min(1, LD.t / 1.2);
+    decal.visible = true;
+    decal.position.set(d.x, L.groundH(d.x, d.z) + 0.3, d.z);
+    const r = LD_REACH * (0.35 + 0.65 * k);
+    decal.scale.set(r, r, 1);
+    decal.material.opacity = 0.35 + 0.35 * Math.abs(Math.sin(LD.t * 10));
+    setLDGlow(1, 0.12, 0.05, 0.25 + 0.75 * k);
+    d.body.rotation.y = -0.6 * k; // wind back
+    if (LD.t >= 1.2) {
+      LD.state = 'swing'; LD.t = 0; decal.visible = false; setLDGlow(1, 1, 1, 0);
+      sfx.whoosh(true);
+      const now = performance.now() / 1000;
+      if (dist < LD_REACH + 0.4) {
+        if (now - G.lastDodge < 0.6 || player.dash > 0) {
+          popAt(player.pos.clone().add(new THREE.Vector3(0, 2.3, 0)), 'Perfect dodge!', '#9fe8ff', 28);
+          Q.event('dodge');
+        } else {
+          // staggered: knocked back, no damage
+          impact(0.1, 0.2); sfx.hit('wood', true);
+          player.dash = 0.16; player.dashDir.set(dx, 0, dz).normalize();
+          popAt(player.pos.clone().add(new THREE.Vector3(0, 2.3, 0)), 'Staggered', '#ff8a6a', 24);
+          if (LD.hintShown++ < 3) toast('Tap dodge when it glows red', 2.6);
+        }
+      }
+    }
+  } else if (LD.state === 'swing') {
+    LD.t += dt;
+    d.body.rotation.y = -0.6 + Math.min(1, LD.t / 0.18) * 2.2 - Math.max(0, LD.t - 0.25) * 4;
+    if (LD.t > 0.65) { LD.state = 'idle'; d.body.rotation.y = 0; LD.cd = 1.6 + Math.random() * 0.8; }
+  }
 }
 
 // ------------------------------------------------------------------ input
@@ -452,7 +546,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Space') attack();
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') dodge();
   if (e.code === 'KeyE' && nearRyn()) openDialog();
-  const n = '12345'.indexOf(e.key); if (n >= 0) useAbility(n);
+  const n = '123456'.indexOf(e.key); if (n >= 0) useAbility(n);
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -669,7 +763,7 @@ function frame() {
     d.body.rotation.x = Math.sin(T * 18) * 0.12 * d.wobble;
     d.body.rotation.z = Math.cos(T * 14) * 0.06 * d.wobble;
     d.flash = Math.max(0, d.flash - realDt * 7);
-    for (const mm of d.mats) mm.emissiveIntensity = d.flash * 0.9;
+    if (!(d === LD.d && LD.state === 'windup')) for (const mm of d.mats) mm.emissiveIntensity = d.flash * 0.9;
   }
   // path lights toward the current objective: pulse travelling forward, hide those behind the player
   refreshObjective();
@@ -700,9 +794,10 @@ function frame() {
   // stats, cooldowns
   G.mp = Math.min(G.mpMax, G.mp + dt * 4);
   G.atkCd = Math.max(0, G.atkCd - dt); G.dodgeCd = Math.max(0, G.dodgeCd - dt);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     G.cds[i] = Math.max(0, G.cds[i] - dt);
-    hud.setCooldown(i, G.cds[i] / G.cdMax[i], G.cds[i], i < 4 ? G.mp < G.cost[i] : G.potions <= 0);
+    if (i === 5 && !G.slot6) continue;
+    hud.setCooldown(i, G.cds[i] / G.cdMax[i], G.cds[i], i === 4 ? G.potions <= 0 : G.mp < G.cost[i]);
   }
   hud.setBars(G.hp, G.hpMax, G.mp, G.mpMax);
   G.clock += dt / 10;
@@ -710,11 +805,14 @@ function frame() {
   const target = OBJ[G.objKey].target;
   hud.drawCompass(headingDeg(), bearingTo(target), player.pos.distanceTo(target));
   setFallsDistance(Math.hypot(player.pos.x - L.FALLS_X, player.pos.z + 19.5));
+  if (sayTimer > 0) { sayTimer -= realDt; if (sayTimer <= 0) document.getElementById('say').style.display = 'none'; }
+  updateLiveDummy(dt);
   if (bannerTimer > 0) { bannerTimer -= realDt; if (bannerTimer <= 0) document.getElementById('banner').classList.remove('show'); }
   if (mapImg.width) drawMinimap();
   updateWorldHUD(dt);
   if (toastTimer > 0) { toastTimer -= realDt; if (toastTimer <= 0) document.getElementById('toast').style.display = 'none'; }
-  if (G.finished && !G.ended && Math.hypot(player.pos.x - L.ARCH.x, player.pos.z - L.ARCH.z) < 2.2) {
+  if (Q.isActive('ascend') && !G.ended && Math.hypot(player.pos.x - L.ARCH.x, player.pos.z - L.ARCH.z) < 2.2) {
+    Q.event('arch');
     G.ended = true; document.getElementById('fin').style.display = 'flex'; sfx.fanfare();
   }
 
@@ -750,4 +848,4 @@ Promise.all([loaded, modelsReady]).then(() => {
   window.__ready = true;
 });
 frame();
-window.__game = { G, player, cam, camera, scene, renderer, L, resize };
+window.__game = { G, player, cam, camera, scene, renderer, L, resize, Q, LD, attack, useAbility, dodge };

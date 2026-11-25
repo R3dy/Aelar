@@ -70,6 +70,14 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 #banner .ln { height: 2px; margin: 6px auto 0; width: 70%; background: linear-gradient(90deg, transparent, #e8c870, transparent); }
 #banner.show { animation: banner 3.2s ease-out forwards; }
 @keyframes banner { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.96); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+#hud .slot6 .icon { position: absolute; inset: 7%; width: 86%; height: 86%; border-radius: 8%; opacity: 0; transform: scale(.4); transition: opacity .4s, transform .5s cubic-bezier(.2,1.6,.4,1); }
+#hud .slot6.unlocked .icon { opacity: 1; transform: scale(1); box-shadow: 0 0 0 2px #c9a24a; }
+#hud .slot6.unlocked { animation: unlockglow 1.6s ease-out 2; border-radius: 10%; }
+@keyframes unlockglow { 0% { box-shadow: 0 0 26px 10px rgba(255,210,80,.95); } 100% { box-shadow: 0 0 0 0 rgba(255,210,80,0); } }
+#say { position: fixed; left: 50%; bottom: 26%; transform: translateX(-50%); max-width: 70vw; display: none; pointer-events: none; text-align: center;
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.65) 15%, rgba(0,0,0,.65) 85%, rgba(0,0,0,0)); padding: 6px 40px; font-size: clamp(13px, 2.6vh, 20px); }
+#say .w { color: #ffd84a; font-weight: 700; margin-right: .4em; }
+#say .x { color: #f4ece0; }
 </style>
 </head>
 <body>
@@ -77,6 +85,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 <div id="hud"></div>
 <div id="dialog"><div class="who"></div><div class="txt"></div><div class="more">Tap to continue ▸</div></div>
 <div id="toast"></div>
+<div id="say"><span class="w"></span><span class="x"></span></div>
 <div id="banner"><div class="k">New quest</div><div class="n"></div><div class="ln"></div></div>
 <div id="objmark"><div class="g">◆</div><div class="d"></div></div>
 <div id="stick"><div></div></div>

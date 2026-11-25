@@ -85,6 +85,21 @@ export function createHUD(root) {
     return { b, cd, n };
   });
   els.potion = text('3', 950, 888, 21, 'C');
+  // slot 6 sits over the first padlock; its icon appears when the drill unlocks it
+  {
+    const b = box(974, 826, 76, 76, 'C', 'btn slot6');
+    const ic = document.createElement('canvas'); ic.width = ic.height = 128; ic.className = 'icon';
+    const g = ic.getContext('2d');
+    const gr = g.createRadialGradient(64, 64, 6, 64, 64, 64); gr.addColorStop(0, '#fff6d0'); gr.addColorStop(0.35, '#e0a030'); gr.addColorStop(1, '#2a1404');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = '#fff2c0'; g.lineCap = 'round';
+    for (let k = 0; k < 3; k++) { g.lineWidth = 9 - k * 2; g.globalAlpha = 1 - k * 0.25; g.beginPath(); g.arc(64, 64, 22 + k * 14, k * 2.1, k * 2.1 + 3.6); g.stroke(); }
+    g.globalAlpha = 1; g.fillStyle = '#fff'; g.font = 'bold 26px sans-serif'; g.fillText('6', 8, 28);
+    b.appendChild(ic);
+    const cd = document.createElement('div'); cd.className = 'cd'; b.appendChild(cd);
+    const n = document.createElement('div'); n.className = 'cdn t'; n.style.position = 'absolute'; b.appendChild(n);
+    els.slots.push({ b, cd, n });
+  }
 
   els.dodge = img('dodge', 'btn');
   els.attack = img('attack', 'btn');
@@ -162,6 +177,8 @@ export function createHUD(root) {
     els.hpEmpty.style.display = fh > 0.005 ? 'block' : 'none';
   }
   function setQuest(i, label, done) {
+    els.q[i].t.style.visibility = label === null ? 'hidden' : 'visible';
+    if (label === null) { els.q[i].c.style.display = 'none'; return; }
     els.q[i].t.querySelector('.qt').textContent = label;
     els.q[i].t.classList.toggle('done', done);
     els.q[i].c.style.display = done ? 'block' : 'none';
@@ -239,5 +256,7 @@ export function createHUD(root) {
     setTimeout(() => d.remove(), 1600);
   }
 
-  return { els, layoutAll, setBars, setXP, xpPop, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
+  function unlockSlot(i) { els.slots[i].b.classList.add('unlocked'); }
+
+  return { els, layoutAll, setBars, setXP, xpPop, unlockSlot, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
 }
