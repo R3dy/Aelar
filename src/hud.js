@@ -42,6 +42,11 @@ export function createHUD(root) {
   els.hpEmpty = box(196, 66, 262, 24, 'L'); els.hpEmpty.style.cssText += 'background:rgba(25,8,8,.82);clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);transform-origin:right;';
   els.mpEmpty = box(194, 100, 244, 22, 'L'); els.mpEmpty.style.cssText += 'background:rgba(8,10,28,.82);clip-path:polygon(4% 0,100% 0,96% 100%,0 100%);';
   els.hpEmpty.style.display = 'none';
+  // XP bar under the mana bar
+  els.xpBack = box(200, 129, 232, 9, 'L', 'xpbar');
+  els.xpFill = document.createElement('div'); els.xpFill.className = 'fill'; els.xpBack.appendChild(els.xpFill);
+  els.xpText = text('XP 0 / 600', 316, 147, 12.5, 'L', 'center', 'xptext');
+  els.xpPopAt = box(440, 128, 0, 0, 'L');
   els.hpText = text('240 / 240', 364, 77, 17, 'L');
   els.mpText = text('100 / 100', 362, 111, 17, 'L');
 
@@ -220,5 +225,19 @@ export function createHUD(root) {
     els.dist.style.left = W / 2 + (pd.box.x - REF_W / 2) * S + 'px';
   }
 
-  return { els, layoutAll, setBars, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
+  function setXP(xp, max, level) {
+    els.xpFill.style.width = (100 * xp / max) + '%';
+    els.xpText.textContent = `XP ${xp} / ${max}`;
+  }
+  function xpPop(str) {
+    const d = document.createElement('div');
+    d.className = 't xppop'; d.textContent = str;
+    d.style.fontSize = Math.max(13, 20 * S) + 'px';
+    d.style.left = els.xpPopAt.style.left; d.style.top = els.xpPopAt.style.top;
+    root.appendChild(d);
+    els.xpBack.classList.remove('glow'); void els.xpBack.offsetWidth; els.xpBack.classList.add('glow');
+    setTimeout(() => d.remove(), 1600);
+  }
+
+  return { els, layoutAll, setBars, setXP, xpPop, setQuest, setCooldown, setClock, drawCompass, get scale() { return S; }, layout };
 }
