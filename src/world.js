@@ -37,7 +37,7 @@ export function buildWorld(scene, quality) {
     rock: new THREE.MeshStandardMaterial({ map: TEX.cliff, roughness: 0.95, color: 0xf2eee8 }),
     boulder: new THREE.MeshStandardMaterial({ map: TEX.boulder, roughness: 0.95, color: 0xf0ece6 }),
     plaster: new THREE.MeshStandardMaterial({ map: TEX.plaster, roughness: 0.95, color: 0xfff6e8 }),
-    roof: new THREE.MeshStandardMaterial({ map: TEX.roof, roughness: 0.7, color: 0xd8dce6 }),
+    roof: new THREE.MeshStandardMaterial({ map: TEX.roof, roughness: 0.7, color: 0xd6cbbd }),
     iron: new THREE.MeshStandardMaterial({ color: 0x2c2a2a, roughness: 0.5, metalness: 0.6 }),
   };
   const world = { colliders: [], dummies: [], lanterns: [], updaters: [], M };
@@ -254,8 +254,9 @@ function buildCliffs(scene, M) {
   }
   // second tier face
   for (let x = -46; x < 46; x += 1.5 + R() * 1.0) {
-    if (Math.abs(x - L.ARCH.x) < 1.5) continue;
-    const uz = L.upperZ(x);
+    const ax = Math.abs(x - L.ARCH.x);
+    if (ax < 3.3) continue; // keep the archway clear
+    const uz = L.upperZ(x) - (1 - smooth(3.3, 5.5, ax)) * 1.2;
     const r = 1.1 + R() * 0.9;
     const base = L.PLAT - 0.6;
     const h = L.UPPER - base + 0.6 + R() * 1.2;
@@ -265,9 +266,9 @@ function buildCliffs(scene, M) {
     geos.push(g);
   }
   // behind and above the arch
-  for (const dx of [-2.2, -1.2, 0, 1.2, 2.4]) {
-    const g = rockColumn(L.UPPER - L.PLAT + 2.2 + Math.abs(dx) * -0.2, 1.3, dx * 10);
-    g.translate(L.ARCH.x + dx, L.PLAT - 0.3, L.ARCH.z - 1.4 - Math.abs(dx) * 0.2);
+  for (const dx of [-3.4, -2.2, -1.1, 0, 1.1, 2.3, 3.5]) {
+    const g = rockColumn(L.UPPER - L.PLAT + 2.2 - Math.abs(dx) * 0.15, 1.3, dx * 10);
+    g.translate(L.ARCH.x + dx, L.PLAT - 0.3, L.ARCH.z - 2.5 - Math.abs(dx) * 0.15);
     geos.push(g);
   }
   const g = boxUV(mergeGeometries(geos), 0.3);
@@ -1010,7 +1011,7 @@ function buildTrees(scene, col) {
     col(x, z, Math.max(0.35, cr * 0.12));
     // leaf cards scattered over the canopy surface break up the blob silhouette
     const cp = c.attributes.position, cn = c.attributes.normal, cc = c.attributes.color;
-    const nCards = Math.round(cr * cr * 9);
+    const nCards = Math.round(cr * cr * 16);
     for (let k = 0; k < nCards; k++) {
       const i = Math.floor(R() * cp.count);
       if (cn.getY(i) < -0.5) continue;
@@ -1072,7 +1073,7 @@ function buildTrees(scene, col) {
       nn.set(nx, ny, nz).normalize();
       qq.setFromUnitVectors(zAxis, nn);
       spin.setFromAxisAngle(nn, R() * 6.28); qq.premultiply(spin);
-      const s = (0.7 + R() * 0.6) * Math.min(1.6, 0.45 + cr * 0.25);
+      const s = (0.8 + R() * 0.7) * Math.min(1.9, 0.5 + cr * 0.3);
       sc.set(s, s, s); pp.set(x, y, z);
       m4.compose(pp, qq, sc); inst.setMatrixAt(i, m4);
       col2.setRGB(r * 1.05, g * 1.05, b * 1.05); inst.setColorAt(i, col2);
@@ -1162,11 +1163,12 @@ function buildGrass(scene, quality, world) {
     const y = L.groundH(x, z);
     e.set(0, R() * Math.PI, 0); q.setFromEuler(e);
     const sc = (0.75 + R() * 0.7) * (0.75 + 0.5 * a);
-    s.set(sc * 1.1, sc * (0.8 + R() * 0.5), sc * 1.1);
+    const lawn = 0.45 + 0.55 * smooth(2.0, 7.0, L.pathDist(x, z)); // short lawn by the path
+    s.set(sc * 1.1, sc * (0.8 + R() * 0.5) * lawn, sc * 1.1);
     p.set(x, y - 0.03, z);
     m4.compose(p, q, s);
     mesh.setMatrixAt(n, m4);
-    const hue = 0.22 + (R() - 0.5) * 0.04 + n2(x * 0.1, z * 0.1) * 0.02;
+    const hue = 0.2 + (R() - 0.5) * 0.04 + n2(x * 0.1, z * 0.1) * 0.02;
     c.setHSL(hue - 0.015, 0.55 + R() * 0.1, 0.62 + R() * 0.1 + n2(x * 0.3, z * 0.3) * 0.05);
     mesh.setColorAt(n, c);
     n++;
@@ -1181,7 +1183,7 @@ function buildGrass(scene, quality, world) {
 function flowerTex() {
   return canvasTex(256, 64, (c) => {
     // four flower kinds side by side: purple spike, yellow, white, pink
-    const kinds = [['#8a4fd8', '#c79bff'], ['#ffd21f', '#ff9d00'], ['#ffffff', '#ffe27a'], ['#ff5fae', '#ffd0e6']];
+    const kinds = [['#9a5cf0', '#d2a8ff'], ['#ffe14a', '#ffb000'], ['#ffffff', '#ffe27a'], ['#ff6fbf', '#ffd6ec']];
     kinds.forEach(([a, b], k) => {
       const ox = k * 64;
       c.strokeStyle = '#6fae2e'; c.lineWidth = 3;
@@ -1200,8 +1202,8 @@ function flowerTex() {
 }
 
 function buildFlowers(scene, quality) {
-  const count = quality === 'low' ? 1500 : 3500;
-  const q1 = new THREE.PlaneGeometry(0.4, 0.4); q1.translate(0, 0.2, 0);
+  const count = quality === 'low' ? 1200 : 2500;
+  const q1 = new THREE.PlaneGeometry(0.28, 0.28); q1.translate(0, 0.16, 0);
   const q2 = q1.clone(); q2.rotateY(Math.PI / 2);
   const geo = mergeGeometries([q1, q2]);
   const nrm = geo.attributes.normal;
@@ -1267,12 +1269,12 @@ function buildSky(scene, world) {
       c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
     }
   });
-  for (let i = 0; i < 9; i++) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloud, transparent: true, depthWrite: false, fog: false, opacity: 0.9 }));
+  for (let i = 0; i < 6; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloud, transparent: true, depthWrite: false, fog: false, opacity: 0.8 }));
     const a = -Math.PI / 2 + (rand() - 0.5) * 2.4;
     const d = 230;
-    s.position.set(Math.cos(a) * d, 55 + rand() * 50, Math.sin(a) * d);
-    s.scale.set(90 + rand() * 60, 34 + rand() * 18, 1);
+    s.position.set(Math.cos(a) * d, 85 + rand() * 60, Math.sin(a) * d);
+    s.scale.set(70 + rand() * 40, 26 + rand() * 12, 1);
     scene.add(s);
   }
   // distant mountain ring
@@ -1290,10 +1292,10 @@ function buildSky(scene, world) {
   scene.add(mtn);
   // distant forest of pine silhouettes on the hills
   const cone = new THREE.ConeGeometry(1.6, 7, 6); cone.translate(0, 3.5, 0);
-  const forest = new THREE.InstancedMesh(cone, new THREE.MeshLambertMaterial({ color: 0x3a6a40 }), 400);
+  const forest = new THREE.InstancedMesh(cone, new THREE.MeshLambertMaterial({ color: 0x4f7d5c }), 160);
   const m4 = new THREE.Matrix4();
   let k = 0;
-  for (let i = 0; i < 2000 && k < 400; i++) {
+  for (let i = 0; i < 2000 && k < 160; i++) {
     const a = rand() * Math.PI * 2, d = 75 + rand() * 60;
     const x = 3 + Math.cos(a) * d, z = -2 + Math.sin(a) * d;
     if (z > 20 && rand() < 0.7) continue;

@@ -90,11 +90,11 @@ save('flagstone', flag)
 # --- grass blade card (RGBA), several blades on one card ---
 W, H = 128, 256
 card = np.zeros((H, W, 4), np.float32)
-for b in range(9):
-    x0 = rng.uniform(10, W - 10)
-    lean = rng.uniform(-28, 28)
-    h = rng.uniform(0.55, 1.0) * H
-    wid = rng.uniform(5, 9)
+for b in range(20):
+    x0 = rng.uniform(8, W - 8)
+    lean = rng.uniform(-34, 34)
+    h = rng.uniform(0.45, 1.0) * H
+    wid = rng.uniform(3, 5.5)
     for y in range(int(h)):
         t = y / h
         x = x0 + lean * t * t
@@ -103,8 +103,8 @@ for b in range(9):
         xs = np.arange(int(x - ww - 1), int(x + ww + 2))
         xs = xs[(xs >= 0) & (xs < W)]
         a = np.clip(ww - np.abs(xs - x), 0, 1)
-        g = 0.55 + 0.45 * t
-        col = np.array([60 + 80 * g, 120 + 95 * g, 25 + 25 * g])
+        g = 0.5 + 0.5 * t
+        col = np.array([70 + 150 * g * g, 125 + 105 * g, 30 + 30 * g])
         card[yy_, xs, :3] = np.where(a[:, None] > card[yy_, xs, 3:4] / 255, col, card[yy_, xs, :3])
         card[yy_, xs, 3] = np.maximum(card[yy_, xs, 3], a * 255)
 Image.fromarray(card.astype(np.uint8), 'RGBA').save(f'{OUT}/blade.png')
