@@ -1,0 +1,43 @@
+<!doctype html><html><head><style>html,body{margin:0;background:#8fa9b8;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const q=new URLSearchParams(location.search);
+const r=new THREE.WebGLRenderer({antialias:true}); r.setSize(innerWidth,innerHeight); r.outputColorSpace=THREE.SRGBColorSpace;
+r.toneMapping=THREE.ACESFilmicToneMapping; r.toneMappingExposure=1.05; r.shadowMap.enabled=true; document.body.appendChild(r.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(q.get('bg')||'#9db4c0');
+scene.add(new THREE.HemisphereLight(0xdfefff,0x5a6a3a,1.4));
+const sun=new THREE.DirectionalLight(0xfff1d8,2.6); sun.position.set(2,5,4); sun.castShadow=true; sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-2,right:2,top:3,bottom:-1}); scene.add(sun);
+const ground=new THREE.Mesh(new THREE.CircleGeometry(1.6,48),new THREE.MeshStandardMaterial({color:0x6f8a4a,roughness:1})); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+const cam=new THREE.PerspectiveCamera(28,innerWidth/innerHeight,0.1,50);
+const g=await new GLTFLoader().loadAsync(q.get('m')+'.glb');
+const root=g.scene; root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;}});
+const hide=(q.get('hide')||'').split(',');root.traverse(o=>{if(hide.includes(o.name))o.visible=false;});
+root.rotation.y=(+q.get('yaw')||0)*Math.PI/180; scene.add(root);
+let swordInfo=null;
+if(q.get('sword')){
+  const sg=await new GLTFLoader().loadAsync(q.get('sword')+'.glb'); const sword=sg.scene; sword.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;}});
+  const bone=root.getObjectByName('RightHand'); root.updateMatrixWorld(true);
+  const hp=new THREE.Vector3(), hq=new THREE.Quaternion(), hs=new THREE.Vector3(); bone.matrixWorld.decompose(hp,hq,hs);
+  const by=new THREE.Vector3(0,1,0).applyQuaternion(hq).normalize();
+  const palm=hp.clone().addScaledVector(by,+(q.get('grip')||0.085));
+  const f=new THREE.Vector3(0,0.0,1).applyAxisAngle(new THREE.Vector3(0,1,0),root.rotation.y);
+  const blade=f.sub(by.clone().multiplyScalar(f.dot(by))).normalize();
+  const xx=new THREE.Vector3().crossVectors(blade,by).normalize(); const zz=new THREE.Vector3().crossVectors(xx,blade);
+  const m=new THREE.Matrix4().makeBasis(xx,blade,zz).setPosition(palm);
+  scene.add(sword); m.decompose(sword.position,sword.quaternion,sword.scale); sword.updateMatrixWorld(true);
+  bone.attach(sword);
+  swordInfo={position:sword.position.toArray().map(v=>+v.toFixed(5)),quaternion:sword.quaternion.toArray().map(v=>+v.toFixed(5)),scale:sword.scale.toArray().map(v=>+v.toFixed(5))};
+}
+const mixer=new THREE.AnimationMixer(root);
+const clip=g.animations.find(c=>c.name===(q.get('clip')||'idle'));
+if(clip){const act=mixer.clipAction(clip); act.play(); mixer.setTime((+q.get('t')||0)*clip.duration);}
+root.updateMatrixWorld(true);
+const box=new THREE.Box3().setFromObject(root.getObjectByName('AelarBody')||root,true);
+const h=+q.get('h')||1.9; const zm=+q.get('zoom')||1; const ty=+q.get('ty')||h*0.48; cam.position.set(0,ty+h*0.07,h*2.55/zm); cam.lookAt(0,ty,0);
+r.render(scene,cam);
+window.__info={sword:swordInfo,clips:g.animations.map(c=>[c.name,+c.duration.toFixed(2)]),box:[box.min.toArray().map(v=>+v.toFixed(3)),box.max.toArray().map(v=>+v.toFixed(3))]};
+window.__ready=true;
+</script></body></html>
